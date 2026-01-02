@@ -1,0 +1,265 @@
+```
+╔════════════════════════════════════════════════════════════════════════════╗
+║                    DOCKER AUTO-START INTEGRATION FLOW                      ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────┐
+│    USER     │  "Create an Express server with /hello endpoint"
+└──────┬──────┘
+       │
+       ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│ FRONTEND (http://localhost:5173)                                       │
+│                                                                         │
+│  ChatInterface.tsx                                                     │
+│  ├─ User types message                                                │
+│  ├─ POST /api/stream/chat                                            │
+│  └─ EventSource listening for SSE events                             │
+└────────────────────────────────┬───────────────────────────────────────┘
+                                 │
+                                 ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│ BACKEND (http://localhost:3000)                                        │
+│                                                                         │
+│ routes/stream.ts                                                       │
+│ ├─ STEP 1-10: Load chat, build prompt, call AI                       │
+│ ├─ STEP 11-14: Stream AI response chunks                             │
+│ │    sendEvent('chat:chunk', { chunk, fullText })                    │
+│ │                                                                      │
+│ ├─ STEP 15-17: Parse AI response for <dyad-write> tags              │
+│ │    fileChanges = [                                                 │
+│ │      { path: 'server.js', type: 'write', content: '...' },       │
+│ │      { path: 'package.json', type: 'write', content: '...' }     │
+│ │    ]                                                               │
+│ │                                                                      │
+│ ├─ STEP 18: Write files to disk                                      │
+│ │    fs.writeFile('./apps/my-app/server.js', content)              │
+│ │    fs.writeFile('./apps/my-app/package.json', content)           │
+│ │    ✅ Files written to: ./apps/my-app/                            │
+│ │                                                                      │
+│ └─ STEP 18b: 🆕 AUTO-START DOCKER CONTAINER                          │
+│      │                                                                 │
+│      ├─ if (DOCKER_ENABLED && fileChanges.length > 0)                │
+│      │                                                                 │
+│      ├─ sendEvent('docker:starting')                                 │
+│      │   ↓ Frontend shows: "🐳 Starting Docker container..."         │
+│      │                                                                 │
+│      ├─ dockerService.stopApp(appId)  // Stop old container          │
+│      │                                                                 │
+│      ├─ dockerService.runAppInDocker({                               │
+│      │     appId: 1,                                                  │
+│      │     appPath: './apps/my-app',                                 │
+│      │     installCommand: 'pnpm install',                           │
+│      │     startCommand: 'pnpm dev'                                  │
+│      │   })                                                           │
+│      │                                                                 │
+│      └─ sendEvent('docker:started', {                                │
+│            port: 32100,                                               │
+│            url: 'http://localhost:32100'                             │
+│          })                                                           │
+│          ↓ Frontend shows: "✅ App running [Open App →]"             │
+└────────────────────────────────┬───────────────────────────────────────┘
+                                 │
+                                 ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│ DOCKER SERVICE (services/docker_service.ts)                           │
+│                                                                         │
+│ runAppInDocker()                                                       │
+│ ├─ 1. Check: docker --version                                        │
+│ │    ✅ Docker available                                              │
+│ │                                                                      │
+│ ├─ 2. Stop: docker stop dyad-app-1 && docker rm dyad-app-1          │
+│ │    ✅ Old container removed                                         │
+│ │                                                                      │
+│ ├─ 3. Create Dockerfile.dyad:                                        │
+│ │    FROM node:22-alpine                                             │
+│ │    RUN npm install -g pnpm                                         │
+│ │    ✅ Dockerfile created                                            │
+│ │                                                                      │
+│ ├─ 4. Build: docker build -t dyad-app-1 .                          │
+│ │    [+] Building image...                                           │
+│ │    ✅ Image built: dyad-app-1                                       │
+│ │                                                                      │
+│ └─ 5. Run: docker run --rm --name dyad-app-1 \                      │
+│           -p 32100:32100 \                                            │
+│           -v ./apps/my-app:/app \                                     │
+│           -v dyad-pnpm-1:/app/.pnpm-store \                          │
+│           -w /app \                                                   │
+│           dyad-app-1 \                                               │
+│           sh -c "pnpm install && pnpm dev"                           │
+└────────────────────────────────┬───────────────────────────────────────┘
+                                 │
+                                 ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│ DOCKER CONTAINER (dyad-app-1)                                         │
+│                                                                         │
+│ Container Details:                                                     │
+│ ├─ Name: dyad-app-1                                                  │
+│ ├─ Image: dyad-app-1                                                 │
+│ ├─ Base: node:22-alpine                                              │
+│ ├─ Port: 32100 → 32100                                               │
+│ ├─ Working Dir: /app                                                 │
+│ ├─ Volumes:                                                           │
+│ │   - ./apps/my-app → /app (app code)                               │
+│ │   - dyad-pnpm-1 → /app/.pnpm-store (deps cache)                  │
+│ │                                                                      │
+│ ├─ Execution:                                                         │
+│ │   $ pnpm install                                                   │
+│ │   Progress: resolved 50, reused 50, downloaded 0                   │
+│ │   Done in 2.1s                                                     │
+│ │                                                                      │
+│ │   $ pnpm dev                                                       │
+│ │   > node server.js                                                 │
+│ │   Server running on port 32100                                     │
+│ │   ✅ READY                                                          │
+│ │                                                                      │
+│ └─ Output streamed to:                                                │
+│     - Backend console (always)                                        │
+│     - Frontend via SSE (docker:output events)                        │
+└────────────────────────────────┬───────────────────────────────────────┘
+                                 │
+                                 ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│ FRONTEND UPDATE                                                        │
+│                                                                         │
+│  EventSource receives events:                                          │
+│  ├─ event: docker:starting                                           │
+│  │   → setDockerStatus("🐳 Starting Docker container...")            │
+│  │                                                                      │
+│  ├─ event: docker:started                                            │
+│  │   → setDockerStatus("✅ App running in Docker")                   │
+│  │   → setDockerUrl("http://localhost:32100")                       │
+│  │                                                                      │
+│  └─ UI Updates:                                                       │
+│      ┌─────────────────────────────────────────────────┐            │
+│      │ ✅ App running in Docker    [Open App →]       │            │
+│      └─────────────────────────────────────────────────┘            │
+│           ↑                              ↑                            │
+│           │                              │                            │
+│      Status text                  Clickable button                   │
+└────────────────────────────────┬───────────────────────────────────────┘
+                                 │
+                                 ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│ USER CLICKS "OPEN APP →"                                              │
+│                                                                         │
+│  Opens new tab: http://localhost:32100                                │
+│  ├─ Browser → Docker Container (port 32100)                          │
+│  ├─ Express server responds                                           │
+│  └─ { "message": "Hello World!" }                                    │
+│     ✅ APP ACCESSIBLE!                                                 │
+└─────────────────────────────────────────────────────────────────────────┘
+
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                              KEY FEATURES                                   ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+✅ AUTOMATIC         Docker starts immediately after files are generated
+✅ ISOLATED          Each app in its own container
+✅ CACHED            Dependencies cached in named volumes
+✅ REAL-TIME         Status updates via SSE
+✅ ONE-CLICK         "Open App" button for instant access
+✅ PRODUCTION-LIKE   Same environment as deployment
+
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                            FILE STRUCTURE                                   ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+backend/
+├── .env
+│   ├── DOCKER_ENABLED=true
+│   ├── DOCKER_APP_PORT=32100
+│   └── DOCKER_NODE_IMAGE=node:22-alpine
+│
+├── apps/
+│   └── my-app/
+│       ├── Dockerfile.dyad (auto-generated)
+│       ├── server.js (AI-generated)
+│       └── package.json (AI-generated)
+│
+└── src/
+    ├── routes/
+    │   └── stream.ts (🆕 Docker integration added)
+    │
+    └── services/
+        └── docker_service.ts (Docker operations)
+
+frontend/
+└── src/
+    └── components/
+        ├── ChatInterface.tsx (🆕 Docker status added)
+        └── ChatInterface.css (🆕 Docker styles added)
+
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                         DOCKER COMMANDS                                     ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+# View running containers
+docker ps --filter "name=dyad-app-*"
+
+# View container logs
+docker logs -f dyad-app-1
+
+# Stop container
+docker stop dyad-app-1
+
+# Remove container
+docker rm dyad-app-1
+
+# List volumes
+docker volume ls --filter "name=dyad-pnpm-*"
+
+# Remove volume
+docker volume rm dyad-pnpm-1
+
+# Access running app
+curl http://localhost:32100
+# or
+open http://localhost:32100
+
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                            TIMING METRICS                                   ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+AI Response:        5-15 seconds
+File Write:         <100ms
+Docker Build:       30-60s (first time), 2-5s (cached)
+Container Start:    5-10s (first time), 3-5s (subsequent)
+Deps Install:       10-30s (first time), 2-5s (cached)
+─────────────────────────────────────────────────────────────
+Total (First):      50-120 seconds
+Total (Cached):     15-35 seconds
+
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                          TROUBLESHOOTING                                    ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+Problem: Container not starting
+Solution:
+  1. Check Docker: docker ps
+  2. Check env: DOCKER_ENABLED=true
+  3. View logs: docker logs dyad-app-1
+
+Problem: Port already in use
+Solution:
+  1. Find process: lsof -i :32100
+  2. Kill process: kill -9 <PID>
+  3. Or change port in .env
+
+Problem: Files not generated
+Solution:
+  1. Check AI response includes <dyad-write> tags
+  2. Check backend console for errors
+  3. Verify app path: ls -la backend/apps/
+
+Problem: Frontend not showing status
+Solution:
+  1. Open browser console (F12)
+  2. Check for SSE events
+  3. Verify backend is sending docker:* events
+```

@@ -1,0 +1,37 @@
+# Docker
+node_modules
+dist
+*.log
+.env
+.env.local
+
+# Data directories
+data/
+apps/
+
+# Git
+.git
+.gitignore
+
+# Editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation (optional - remove if you want to include)
+*.md
+!README.md
+
+# Nginx
+nginx/logs/
+nginx/ssl/
+
+# Test files (optional)
+*.test.ts
+*.spec.ts
+__tests__/

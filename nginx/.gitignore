@@ -1,0 +1,18 @@
+# Nginx logs
+logs/
+*.log
+
+# SSL certificates (don't commit private keys)
+ssl/*.key
+ssl/*.pem
+ssl/*.crt
+
+# Docker volumes
+data/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/

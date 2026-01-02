@@ -1,0 +1,31 @@
+version: '3.8'
+services:
+  db:
+    image: quay.io/enterprisedb/postgresql:16
+    container_name: dyad_db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dyad
+      TZ: Asia/Kolkata
+      PGTZ: Asia/Kolkata
+    ports:
+      - "5432:5432"
+
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:21.1.1
+    container_name: keycloak
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      DB_VENDOR: POSTGRES
+      DB_ADDR: db
+      DB_DATABASE: dyad
+      DB_USER: user
+      DB_PASSWORD: postgres
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    command: ["start-dev"]

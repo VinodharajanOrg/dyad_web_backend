@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: dyad-nginx-proxy
+    ports:
+      - "80:80"
+      # - "443:443"  # Uncomment for HTTPS
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./logs:/var/log/nginx
+      # - ./ssl:/etc/nginx/ssl:ro  # Uncomment for HTTPS with SSL certificates
+    networks:
+      - dyad-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  backend:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: dyad-backend
+    ports:
+      - "3001:3001"  # External port 3002 to avoid conflict with host backend
+      # Container preview ports (32100-32200) are managed by Docker-in-Docker, not exposed here
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - CONTAINERIZATION_ENABLED=true
+      - CONTAINERIZATION_ENGINE=docker
+      - AUTO_KILL_PORT=true
+      - DATABASE_URL=postgresql://hardik%2Ehadvani@host.docker.internal:5432/dyad
+      - DATA_DIR=/app/data
+      - APPS_BASE_DIR=/app/apps
+      - HOST_APPS_BASE_DIR=/Users/hardik.hadvani/Hardik.Hadvani/Projects/Mastercard_POC/dyad_a/dyad_3/dyad/backend/apps
+    volumes:
+      - ../data:/app/data
+      - ../apps:/app/apps  # Mount apps directory for container access
+      - /var/run/docker.sock:/var/run/docker.sock  # For Docker-in-Docker
+    networks:
+      - dyad-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Allow connection to host PostgreSQL
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  dyad-network:
+    driver: bridge
