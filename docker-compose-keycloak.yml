@@ -10,7 +10,8 @@ services:
       PGTZ: Asia/Kolkata
     ports:
       - "5432:5432"
-
+    networks:
+      - keycloak-network
 
   keycloak:
     image: quay.io/keycloak/keycloak:21.1.1
@@ -27,8 +28,17 @@ services:
       KC_HOSTNAME_STRICT: "false"
       KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_PROXY: "edge"
-    ports:
-      - "8080:8080"
+      KC_HOSTNAME: "10.157.150.207"
+      KC_HOSTNAME_PORT: "8080"
+
+    expose:
+      - "8080"
+    networks:
+      - keycloak-network
     depends_on:
       - db
     command: ["start-dev", "--http-enabled=true", "--hostname-strict=false", "--hostname-strict-https=false", "--proxy=edge"]
+
+networks:
+  keycloak-network:
+    driver: bridge
