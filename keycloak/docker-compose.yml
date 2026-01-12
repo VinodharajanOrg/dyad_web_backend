@@ -1,11 +1,11 @@
 services:
   db:
     image: quay.io/enterprisedb/postgresql:16
-    container_name: dyad_db
+    container_name: vibe_db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-dyad}
+      POSTGRES_DB: ${POSTGRES_DB:-vibe}
       TZ: Asia/Kolkata
       PGTZ: Asia/Kolkata
     volumes:
@@ -71,7 +71,7 @@ services:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-dyad}
+      KC_DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-vibe}
       KC_DB_USERNAME: ${POSTGRES_USER:-user}
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       KC_HTTP_ENABLED: "true"
