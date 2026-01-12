@@ -60,13 +60,13 @@ services:
       - CONTAINERIZATION_ENGINE=${CONTAINERIZATION_ENGINE:-docker}
       - AUTO_KILL_PORT=${AUTO_KILL_PORT:-true}
       - DEFAULT_PACKAGE_MANAGER=${DEFAULT_PACKAGE_MANAGER:-pnpm}
-      - CONTAINER_INACTIVITY_TIMEOUT=${CONTAINER_INACTIVITY_TIMEOUT:-120000}
+      - CONTAINER_INACTIVITY_TIMEOUT=${CONTAINER_INACTIVITY_TIMEOUT:-1600000}
       - CONTAINER_CPU_LIMIT=${CONTAINER_CPU_LIMIT:-4}
       - CONTAINER_MEMORY_LIMIT=${CONTAINER_MEMORY_LIMIT:-1g}
       
       # Docker Configuration
       - DOCKER_SOCKET=${DOCKER_SOCKET:-/var/run/docker.sock}
-      - DOCKER_IMAGE=${DOCKER_IMAGE:-node:22-alpine}
+      - DOCKER_IMAGE=${DOCKER_IMAGE:-dyad-vite-dev:latest}
       - DOCKER_DEFAULT_PORT=${DOCKER_DEFAULT_PORT:-32100}
       
       # Podman Configuration
@@ -92,7 +92,7 @@ services:
       - LOG_HTTP_AUTH=${LOG_HTTP_AUTH}
       
       # AI Configuration
-      - DEFAULT_AI_MODEL=${DEFAULT_AI_MODEL:-google:gemini-2.5-flash}
+      - DEFAULT_AI_MODEL=${DEFAULT_AI_MODEL:-anthropic:claude-sonnet-4-5}
       - FALLBACK_AI_MODEL=${FALLBACK_AI_MODEL:-openai:gpt-4o}
       - DEFAULT_CHAT_MODE=${DEFAULT_CHAT_MODE:-auto-code}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
