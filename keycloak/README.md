@@ -30,8 +30,8 @@ Production-ready Keycloak setup with PostgreSQL and Nginx proxy.
    ```
 
 4. **Access Keycloak:**
-   - URL: http://10.157.150.207:8080 (or your configured hostname)
-   - Admin Console: http://10.157.150.207:8080/admin
+   - URL: http://10.157.147.235:8080 (or your configured hostname)
+   - Admin Console: http://10.157.147.235:8080/admin
 
 ## Services
 

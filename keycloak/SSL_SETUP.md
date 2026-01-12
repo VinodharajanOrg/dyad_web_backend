@@ -11,7 +11,7 @@ cd keycloak/ssl
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -keyout key.pem \
   -out cert.pem \
-  -subj "/C=US/ST=State/L=City/O=Organization/CN=10.157.150.207"
+  -subj "/C=US/ST=State/L=City/O=Organization/CN=10.157.147.235"
 ```
 
 ## Option 2: Let's Encrypt (Production)
@@ -73,7 +73,7 @@ After setting up HTTPS, update the Keycloak hostname:
 
 1. Edit `.env`:
    ```
-   KC_HOSTNAME=your-domain.com  # or 10.157.150.207
+   KC_HOSTNAME=your-domain.com  # or 10.157.147.235
    ```
 
 2. Restart services:
