@@ -113,3 +113,9 @@ openssl x509 -in keycloak/ssl/cert.pem -text -noout
 ### Browser security warning:
 - Self-signed certificates will show a warning in browsers
 - For production, use a proper CA-signed certificate (Let's Encrypt is free)
+
+
+
+docker exec keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password <your-admin-password>
+
+docker exec keycloak /opt/keycloak/bin/kcadm.sh update realms/master -s sslRequired=NONE
