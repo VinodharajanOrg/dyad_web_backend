@@ -33,7 +33,10 @@ const server = http.createServer(app);
 
 // Middleware
 app.use(cors({
-  origin: ["http://localhost:3000", "http://localhost:3001"],
+  origin: (origin, callback) => {
+    // Allow all origins by reflecting the request origin
+    callback(null, origin || '*');
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
