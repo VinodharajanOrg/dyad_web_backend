@@ -28,19 +28,81 @@ services:
       context: ..
       dockerfile: Dockerfile
     container_name: dyad-backend
+    env_file:
+      - ../.env
     ports:
-      - "3001:3001"  # External port 3002 to avoid conflict with host backend
+      - "${PORT:-3001}:${PORT:-3001}"
       # Container preview ports (32100-32200) are managed by Docker-in-Docker, not exposed here
     environment:
-      - NODE_ENV=production
-      - PORT=3001
-      - CONTAINERIZATION_ENABLED=true
-      - CONTAINERIZATION_ENGINE=docker
-      - AUTO_KILL_PORT=true
-      - DATABASE_URL=postgresql://hardik%2Ehadvani@host.docker.internal:5432/dyad
+      # Server Configuration
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${PORT:-3001}
+      - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-0}
+      
+      # Database
+      - DATABASE_URL=${DATABASE_URL}
+      
+      # Rate Limiting
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-900000}
+      - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-500}
+      
+      # File Size Limits
+      - DEFAULT_LIMIT=${DEFAULT_LIMIT:-10mb}
+      - ATTACHMENT_SIZE_LIMIT_MB=${ATTACHMENT_SIZE_LIMIT_MB:-50mb}
+      
+      # Directories
       - DATA_DIR=/app/data
-      - APPS_BASE_DIR=/app/apps
-      - HOST_APPS_BASE_DIR=/Users/hardik.hadvani/Hardik.Hadvani/Projects/Mastercard_POC/dyad_a/dyad_3/dyad/backend/apps
+      - APPS_BASE_DIR=${APPS_BASE_DIR:-/app/apps}
+      - HOST_APPS_BASE_DIR=${HOST_APPS_BASE_DIR}
+      
+      # Containerization
+      - CONTAINERIZATION_ENABLED=${CONTAINERIZATION_ENABLED:-true}
+      - CONTAINERIZATION_ENGINE=${CONTAINERIZATION_ENGINE:-docker}
+      - AUTO_KILL_PORT=${AUTO_KILL_PORT:-true}
+      - DEFAULT_PACKAGE_MANAGER=${DEFAULT_PACKAGE_MANAGER:-pnpm}
+      - CONTAINER_INACTIVITY_TIMEOUT=${CONTAINER_INACTIVITY_TIMEOUT:-120000}
+      - CONTAINER_CPU_LIMIT=${CONTAINER_CPU_LIMIT:-4}
+      - CONTAINER_MEMORY_LIMIT=${CONTAINER_MEMORY_LIMIT:-1g}
+      
+      # Docker Configuration
+      - DOCKER_SOCKET=${DOCKER_SOCKET:-/var/run/docker.sock}
+      - DOCKER_IMAGE=${DOCKER_IMAGE:-node:22-alpine}
+      - DOCKER_DEFAULT_PORT=${DOCKER_DEFAULT_PORT:-32100}
+      
+      # Podman Configuration
+      - PODMAN_SOCKET=${PODMAN_SOCKET}
+      - PODMAN_IMAGE=${PODMAN_IMAGE:-node:22-alpine}
+      - PODMAN_DEFAULT_PORT=${PODMAN_DEFAULT_PORT:-32100}
+      
+      # Auth Configuration
+      - AUTH_PROVIDER=${AUTH_PROVIDER:-keycloak}
+      - AUTH_ISSUER_URL=${AUTH_ISSUER_URL}
+      - AUTH_CLIENT_ID=${AUTH_CLIENT_ID}
+      - AUTH_CLIENT_SECRET=${AUTH_CLIENT_SECRET}
+      - AUTH_REDIRECT_URI=${AUTH_REDIRECT_URI}
+      - AUTH_LOGOUT_ENDPOINT=${AUTH_LOGOUT_ENDPOINT}
+      - AUTH_TOKEN_ENDPOINT=${AUTH_TOKEN_ENDPOINT}
+      - AUTH_USERINFO_ENDPOINT=${AUTH_USERINFO_ENDPOINT}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-console}
+      - LOG_HTTP_ENDPOINT=${LOG_HTTP_ENDPOINT}
+      - LOG_HTTP_AUTH=${LOG_HTTP_AUTH}
+      
+      # AI Configuration
+      - DEFAULT_AI_MODEL=${DEFAULT_AI_MODEL:-google:gemini-2.5-flash}
+      - FALLBACK_AI_MODEL=${FALLBACK_AI_MODEL:-openai:gpt-4o}
+      - DEFAULT_CHAT_MODE=${DEFAULT_CHAT_MODE:-auto-code}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY}
+      - AZURE_FOUNDRY_API_KEY=${AZURE_FOUNDRY_API_KEY}
+      - CUSTOM_API_ENDPOINT=${CUSTOM_API_ENDPOINT}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT}
     volumes:
       - ../data:/app/data
       - ../apps:/app/apps  # Mount apps directory for container access
