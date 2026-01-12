@@ -116,6 +116,20 @@ openssl x509 -in keycloak/ssl/cert.pem -text -noout
 
 
 
+# Generate certificates if not already created
+cd /path/to/keycloak/ssl
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout key.pem -out cert.pem \
+  -subj "/C=US/ST=State/L=City/O=Organization/CN=10.157.147.235"
+
+chmod 644 cert.pem
+chmod 600 key.pem
+
+# Restart
+cd ..
+docker compose up -d
+
+
 docker exec keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password <your-admin-password>
 
 docker exec keycloak /opt/keycloak/bin/kcadm.sh update realms/master -s sslRequired=NONE
