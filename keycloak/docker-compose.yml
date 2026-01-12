@@ -71,7 +71,7 @@ services:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-vibe}
+      KC_DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-keycloak_db}
       KC_DB_USERNAME: ${POSTGRES_USER:-user}
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       KC_HTTP_ENABLED: "true"
@@ -105,7 +105,7 @@ services:
         reservations:
           cpus: '0.5'
           memory: 512M
-    command: ["start", "--optimized", "--http-enabled=true", "--hostname-strict=false", "--hostname-strict-https=false", "--proxy=edge"]
+    command: ["start", "--db=postgres", "--http-enabled=true", "--hostname-strict=false", "--hostname-strict-https=false", "--proxy=edge"]
     logging:
       driver: "json-file"
       options:
