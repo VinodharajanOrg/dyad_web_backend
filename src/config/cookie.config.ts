@@ -34,7 +34,7 @@ export const getCookieOptions = (req?: Request): CookieOptions => {
   };
 
   // Log cookie configuration for debugging
-  logger.info('Cookie Options Generated', null, {
+  logger.info('Cookie Options Generated', {
     service: 'cookie-config',
     isProduction,
     useHttps,
@@ -77,7 +77,7 @@ export const getClearCookieOptions = (req?: Request): CookieOptions => {
   };
 
   // Log clear cookie configuration for debugging
-  logger.info('Clear Cookie Options Generated', null, {
+  logger.info('Clear Cookie Options Generated', {
     service: 'cookie-config',
     isSecureRequest,
     clearOptions,

@@ -17,7 +17,7 @@ export const cookieDebugMiddleware = (req: Request, res: Response, next: NextFun
     const referer = req.headers.referer;
     const cookieHeader = req.headers.cookie;
     
-    logger.info('🍪 Cookie Debug - Incoming Request', null, {
+    logger.info('🍪 Cookie Debug - Incoming Request', {
       service: 'cookie-debug',
       method: req.method,
       path: req.path,
@@ -49,7 +49,7 @@ export const cookieDebugMiddleware = (req: Request, res: Response, next: NextFun
     res.send = function(data) {
       const setCookieHeaders = res.getHeader('Set-Cookie');
       if (setCookieHeaders) {
-        logger.info('🍪 Cookie Debug - Outgoing Response', null, {
+        logger.info('🍪 Cookie Debug - Outgoing Response', {
           service: 'cookie-debug',
           path: req.path,
           statusCode: res.statusCode,

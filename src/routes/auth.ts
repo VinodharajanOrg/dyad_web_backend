@@ -16,7 +16,7 @@ router.get("/callback", async (req: any, res) => {
   try {
     const { code } = req.query;
     
-    logger.info('Auth callback received', null, {
+    logger.info('Auth callback received', {
       service: 'auth',
       code: code ? '***' : 'missing',
       protocol: req.protocol,
@@ -29,7 +29,7 @@ router.get("/callback", async (req: any, res) => {
     
     const tokenResponse = await authService.handleCallback(code);
     
-    logger.info('Token response received', null, {
+    logger.info('Token response received', {
       service: 'auth',
       hasAccessToken: !!tokenResponse.tokens.access_token,
       hasRefreshToken: !!tokenResponse.tokens.refresh_token,
@@ -52,7 +52,7 @@ router.get("/callback", async (req: any, res) => {
     
     cookiesToSet.forEach(({ name, value }) => {
       res.cookie(name, value, cookieOptions);
-      logger.info(`Setting cookie: ${name}`, null, {
+      logger.info(`Setting cookie: ${name}`, {
         service: 'auth',
         cookieName: name,
         valueLength: String(value).length,
@@ -61,7 +61,7 @@ router.get("/callback", async (req: any, res) => {
     });
     
     const redirectUrl = process.env.FRONTEND_URL || "http://localhost:3000/";
-    logger.info('Redirecting after auth', null, {
+    logger.info('Redirecting after auth', {
       service: 'auth',
       redirectUrl,
       cookiesSet: cookiesToSet.length,
@@ -75,7 +75,7 @@ router.get("/callback", async (req: any, res) => {
 
 router.get("/logout", (req, res) => {
   try {
-    logger.info('Logout requested', null, {
+    logger.info('Logout requested', {
       service: 'auth',
       existingCookies: Object.keys(req.cookies || {}),
       protocol: req.protocol,
@@ -88,7 +88,7 @@ router.get("/logout", (req, res) => {
     
     cookiesToClear.forEach(cookieName => {
       res.clearCookie(cookieName, clearOptions);
-      logger.info(`Clearing cookie: ${cookieName}`, null, {
+      logger.info(`Clearing cookie: ${cookieName}`, {
         service: 'auth',
         cookieName,
         clearOptions,
@@ -96,7 +96,7 @@ router.get("/logout", (req, res) => {
     });
     
     const redirectUrl = process.env.FRONTEND_URL || "http://localhost:5173/";
-    logger.info('Redirecting after logout', null, {
+    logger.info('Redirecting after logout', {
       service: 'auth',
       redirectUrl,
       cookiesCleared: cookiesToClear.length,
@@ -113,7 +113,7 @@ router.post("/refreshToken", async (req, res) => {
   try {
     const { refreshToken } = req.body;
     
-    logger.info('Token refresh requested', null, {
+    logger.info('Token refresh requested', {
       service: 'auth',
       hasRefreshToken: !!refreshToken,
       existingCookies: Object.keys(req.cookies || {}),
@@ -122,13 +122,13 @@ router.post("/refreshToken", async (req, res) => {
     });
     
     if (!refreshToken) {
-      logger.warn('Refresh token missing', null, { service: 'auth' });
+      logger.warn('Refresh token missing', { service: 'auth' });
       return res.status(400).json({ error: "Refresh token is required" });
     }
     
     const tokenResponse = await authService.refreshToken(refreshToken);
     
-    logger.info('New tokens generated', null, {
+    logger.info('New tokens generated', {
       service: 'auth',
       hasAccessToken: !!tokenResponse.access_token,
       hasRefreshToken: !!tokenResponse.refresh_token,
@@ -141,7 +141,7 @@ router.post("/refreshToken", async (req, res) => {
     res.cookie("refreshToken", tokenResponse.refresh_token, cookieOptions);
     res.cookie("expiresAt", tokenResponse.expires_in, cookieOptions);
     
-    logger.info('Refresh tokens set as cookies', null, {
+    logger.info('Refresh tokens set as cookies', {
       service: 'auth',
       cookiesSet: ['accessToken', 'refreshToken', 'expiresAt'],
       options: cookieOptions,
