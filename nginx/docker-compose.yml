@@ -39,6 +39,7 @@ services:
       - PORT=${PORT:-3001}
       - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-0}
       # SSL Certificate paths (required when USE_HTTPS=true)
+      - USE_HTTPS=true
       - SSL_KEY_PATH=./ssl/key.pem
       - SSL_CERT_PATH=./ssl/cert.pem
       
