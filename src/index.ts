@@ -32,6 +32,10 @@ import { requireAuth } from './middleware/auth.middleware';
 const app = express();
 const server = http.createServer(app);
 
+// Trust proxy - needed for X-Forwarded-Proto and req.secure to work correctly
+// Set to true if behind a proxy (nginx, load balancer, etc.)
+app.set('trust proxy', true);
+
 // Middleware
 app.use(cors({
   origin: (origin, callback) => {

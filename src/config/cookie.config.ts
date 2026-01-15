@@ -17,17 +17,21 @@ export const getCookieOptions = (req?: Request): CookieOptions => {
   const isProduction = process.env.NODE_ENV === 'production';
   const useHttps = process.env.USE_HTTPS === 'true';
   
-  // Check if request is HTTPS
+  // Check if request is HTTPS or behind HTTPS proxy
   const isSecureRequest = req ? (
     req.secure || 
     req.headers['x-forwarded-proto'] === 'https' ||
     req.protocol === 'https'
-  ) : (useHttps || isProduction);
+  ) : false;
+  
+  // Force secure cookies in production or when USE_HTTPS is true
+  // This handles cases where backend is behind SSL-terminating proxy
+  const shouldUseSecureCookies = isProduction || useHttps || isSecureRequest;
 
   const cookieOptions: CookieOptions = {
     httpOnly: false, // Set to true for sensitive tokens if you don't need JS access
-    secure: isSecureRequest, // true for HTTPS, false for HTTP
-    sameSite: isSecureRequest ? 'none' : 'lax', // 'none' requires secure=true
+    secure: shouldUseSecureCookies, // Force secure in production/HTTPS mode
+    sameSite: shouldUseSecureCookies ? 'none' : 'lax', // 'none' for cross-origin HTTPS
     path: '/',
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
     // domain: undefined, // Let browser set it automatically for localhost
@@ -39,10 +43,12 @@ export const getCookieOptions = (req?: Request): CookieOptions => {
     isProduction,
     useHttps,
     isSecureRequest,
+    shouldUseSecureCookies,
     requestProtocol: req?.protocol,
     requestSecure: req?.secure,
     forwardedProto: req?.headers['x-forwarded-proto'],
     host: req?.headers.host,
+    origin: req?.headers.origin,
     cookieOptions: {
       secure: cookieOptions.secure,
       sameSite: cookieOptions.sameSite,
@@ -63,17 +69,20 @@ export const getClearCookieOptions = (req?: Request): CookieOptions => {
   const isProduction = process.env.NODE_ENV === 'production';
   const useHttps = process.env.USE_HTTPS === 'true';
   
-  // Check if request is HTTPS
+  // Check if request is HTTPS or behind HTTPS proxy
   const isSecureRequest = req ? (
     req.secure || 
     req.headers['x-forwarded-proto'] === 'https' ||
     req.protocol === 'https'
-  ) : (useHttps || isProduction);
+  ) : false;
+  
+  // Force secure cookies in production or when USE_HTTPS is true
+  const shouldUseSecureCookies = isProduction || useHttps || isSecureRequest;
 
   const clearOptions: CookieOptions = {
     path: '/',
-    sameSite: isSecureRequest ? 'none' : 'lax',
-    secure: isSecureRequest,
+    sameSite: shouldUseSecureCookies ? 'none' : 'lax',
+    secure: shouldUseSecureCookies,
   };
 
   // Log clear cookie configuration for debugging
