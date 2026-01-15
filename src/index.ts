@@ -166,17 +166,15 @@ app.use((req, res) => {
   res.status(404).json({ 
     error: 'Not found',
     path: req.path 
-  });/HTTPS server
-    const protocol = process.env.USE_HTTPS === 'true' ? 'https' : 'http';
-    server.listen(PORT, () => {
-      logger.info('Dyad Backend Server Started', {
-        service: protocol,
-        port: PORT,
-        protocol,
-        httpApi: `${protocol}://localhost:${PORT}`,
-        sseStream: `${protocol}://localhost:${PORT}/api/stream/chat`,
-        health: `${protocol}://localhost:${PORT}/health`,
-        apiDocs: `${protocol}
+  });
+});
+
+// Error handler (must be last)
+app.use(errorHandler);
+
+// Initialize and start lifecycle service for container management
+const lifecycleService = ContainerLifecycleService.getInstance();
+
 // Start server with async initialization
 const PORT = process.env.PORT || 3000;
 
@@ -188,15 +186,17 @@ async function startServer() {
     // Start the cleanup loop
     await lifecycleService.start();
     
-    // Start HTTP server
+    // Start HTTP/HTTPS server
+    const protocol = process.env.USE_HTTPS === 'true' ? 'https' : 'http';
     server.listen(PORT, () => {
       logger.info('Dyad Backend Server Started', {
-        service: 'http',
+        service: protocol,
         port: PORT,
-        httpApi: `http://localhost:${PORT}`,
-        sseStream: `http://localhost:${PORT}/api/stream/chat`,
-        health: `http://localhost:${PORT}/health`,
-        apiDocs: `http://localhost:${PORT}/api-docs`,
+        protocol,
+        httpApi: `${protocol}://localhost:${PORT}`,
+        sseStream: `${protocol}://localhost:${PORT}/api/stream/chat`,
+        health: `${protocol}://localhost:${PORT}/health`,
+        apiDocs: `${protocol}://localhost:${PORT}/api-docs`,
         environment: process.env.NODE_ENV || 'development',
         database: process.env.DATABASE_PATH || './data/dyad.db',
         dataDir: process.env.DATA_DIR || './data/apps',
@@ -219,12 +219,12 @@ async function shutdown(signal: string) {
   
   try {
     // Stop the lifecycle manager cleanup loop
-    lifecycleServ/HTTPS server
+    lifecycleService.stop();
+    
+    // Close HTTP/HTTPS server
     await new Promise<void>((resolve) => {
       server.close(() => {
-        logger.info('S((resolve) => {
-      server.close(() => {
-        logger.info('HTTP server closed', { service: 'http' });
+        logger.info('Server closed', { service: 'http' });
         resolve();
       });
     });
