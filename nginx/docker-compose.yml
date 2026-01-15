@@ -32,16 +32,17 @@ services:
       - ../.env
     ports:
       - "${PORT:-3001}:${PORT:-3001}"
+      - "3443:3443"  # HTTPS port
       # Container preview ports (32100-32200) are managed by Docker-in-Docker, not exposed here
     environment:
       # Server Configuration
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=${PORT:-3001}
       - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-0}
-      # SSL Certificate paths (required when USE_HTTPS=true)
-      - USE_HTTPS=true
-      - SSL_KEY_PATH=./ssl/key.pem
-      - SSL_CERT_PATH=./ssl/cert.pem
+      # SSL Configuration
+      - USE_HTTPS=${USE_HTTPS:-true}
+      - SSL_KEY_PATH=/app/ssl/key.pem
+      - SSL_CERT_PATH=/app/ssl/cert.pem
       
       # Database
       - DATABASE_URL=${DATABASE_URL}
@@ -110,6 +111,7 @@ services:
     volumes:
       - ../data:/app/data
       - ../apps:/app/apps  # Mount apps directory for container access
+      - ../ssl:/app/ssl:ro  # Mount SSL certificates for HTTPS
       - /var/run/docker.sock:/var/run/docker.sock  # For Docker-in-Docker
     networks:
       - dyad-network
@@ -117,7 +119,7 @@ services:
       - "host.docker.internal:host-gateway"  # Allow connection to host PostgreSQL
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      test: ["CMD", "wget", "--no-check-certificate", "--quiet", "--tries=1", "--spider", "https://localhost:3001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
