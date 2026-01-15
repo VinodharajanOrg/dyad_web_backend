@@ -46,10 +46,12 @@ export const cookieDebugMiddleware = (req: Request, res: Response, next: NextFun
     
     // Log response headers after they're set
     const originalSend = res.send;
+    const originalRedirect = res.redirect;
+    
     res.send = function(data) {
       const setCookieHeaders = res.getHeader('Set-Cookie');
       if (setCookieHeaders) {
-        logger.info('🍪 Cookie Debug - Outgoing Response', {
+        logger.info('🍪 Cookie Debug - Outgoing Response (send)', {
           service: 'cookie-debug',
           path: req.path,
           statusCode: res.statusCode,
@@ -58,6 +60,27 @@ export const cookieDebugMiddleware = (req: Request, res: Response, next: NextFun
         });
       }
       return originalSend.call(this, data);
+    };
+    
+    res.redirect = function(statusOrUrl: any, url?: any) {
+      const setCookieHeaders = res.getHeader('Set-Cookie');
+      if (setCookieHeaders) {
+        logger.info('🍪 Cookie Debug - Outgoing Response (redirect)', {
+          service: 'cookie-debug',
+          path: req.path,
+          statusCode: res.statusCode || 302,
+          redirectUrl: url || statusOrUrl,
+          setCookieHeaders: Array.isArray(setCookieHeaders) ? setCookieHeaders : [setCookieHeaders],
+          setCookieCount: Array.isArray(setCookieHeaders) ? setCookieHeaders.length : 1,
+          allResponseHeaders: {
+            'content-type': res.getHeader('content-type'),
+            'location': res.getHeader('location'),
+            'access-control-allow-origin': res.getHeader('access-control-allow-origin'),
+            'access-control-allow-credentials': res.getHeader('access-control-allow-credentials'),
+          },
+        });
+      }
+      return originalRedirect.call(this, statusOrUrl, url);
     };
   }
   
