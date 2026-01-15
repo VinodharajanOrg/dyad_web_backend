@@ -15,19 +15,59 @@ router.get("/login", (req, res) => {
 router.get("/callback", async (req: any, res) => {
   try {
     const { code } = req.query;
+    
+    logger.info('Auth callback received', null, {
+      service: 'auth',
+      code: code ? '***' : 'missing',
+      protocol: req.protocol,
+      secure: req.secure,
+      forwardedProto: req.headers['x-forwarded-proto'],
+      host: req.headers.host,
+      origin: req.headers.origin,
+      userAgent: req.headers['user-agent'],
+    });
+    
     const tokenResponse = await authService.handleCallback(code);
     
-    // Get cookie options for cross-origin requests
-    const cookieOptions = getCookieOptions();
+    logger.info('Token response received', null, {
+      service: 'auth',
+      hasAccessToken: !!tokenResponse.tokens.access_token,
+      hasRefreshToken: !!tokenResponse.tokens.refresh_token,
+      userId: tokenResponse.user.id,
+      username: tokenResponse.user.username,
+    });
     
-    res.cookie("user_id", tokenResponse.user.id, cookieOptions);
-    res.cookie("username", tokenResponse.user.username, cookieOptions);
-    res.cookie("email", tokenResponse.user.email, cookieOptions);
-    res.cookie("accessToken", tokenResponse.tokens.access_token, cookieOptions);
-    res.cookie("refreshToken", tokenResponse.tokens.refresh_token, cookieOptions);
-    res.cookie("expiresAt", tokenResponse.tokens.expires_in, cookieOptions);
+    // Get cookie options for cross-origin requests (auto-detects HTTPS)
+    const cookieOptions = getCookieOptions(req);
     
-    return res.redirect(process.env.FRONTEND_URL || "http://localhost:3000/");
+    // Set cookies with detailed logging
+    const cookiesToSet = [
+      { name: 'user_id', value: tokenResponse.user.id },
+      { name: 'username', value: tokenResponse.user.username },
+      { name: 'email', value: tokenResponse.user.email },
+      { name: 'accessToken', value: tokenResponse.tokens.access_token },
+      { name: 'refreshToken', value: tokenResponse.tokens.refresh_token },
+      { name: 'expiresAt', value: tokenResponse.tokens.expires_in },
+    ];
+    
+    cookiesToSet.forEach(({ name, value }) => {
+      res.cookie(name, value, cookieOptions);
+      logger.info(`Setting cookie: ${name}`, null, {
+        service: 'auth',
+        cookieName: name,
+        valueLength: String(value).length,
+        options: cookieOptions,
+      });
+    });
+    
+    const redirectUrl = process.env.FRONTEND_URL || "http://localhost:3000/";
+    logger.info('Redirecting after auth', null, {
+      service: 'auth',
+      redirectUrl,
+      cookiesSet: cookiesToSet.length,
+    });
+    
+    return res.redirect(redirectUrl);
   } catch (error) {
     return res.status(500).send("Authentication failed");
   }
@@ -35,16 +75,34 @@ router.get("/callback", async (req: any, res) => {
 
 router.get("/logout", (req, res) => {
   try {
-    // Clear all authentication cookies
-    const clearOptions = getClearCookieOptions();
-    res.clearCookie("session", clearOptions);
-    res.clearCookie("user_id", clearOptions);
-    res.clearCookie("username", clearOptions);
-    res.clearCookie("email", clearOptions);
-    res.clearCookie("accessToken", clearOptions);
-    res.clearCookie("refreshToken", clearOptions);
-    res.clearCookie("expiresAt", clearOptions);
-    return res.redirect(process.env.FRONTEND_URL || "http://localhost:5173/");
+    logger.info('Logout requested', null, {
+      service: 'auth',
+      existingCookies: Object.keys(req.cookies || {}),
+      protocol: req.protocol,
+      secure: req.secure,
+    });
+    
+    // Clear all authentication cookies (auto-detects HTTPS)
+    const clearOptions = getClearCookieOptions(req);
+    const cookiesToClear = ['session', 'user_id', 'username', 'email', 'accessToken', 'refreshToken', 'expiresAt'];
+    
+    cookiesToClear.forEach(cookieName => {
+      res.clearCookie(cookieName, clearOptions);
+      logger.info(`Clearing cookie: ${cookieName}`, null, {
+        service: 'auth',
+        cookieName,
+        clearOptions,
+      });
+    });
+    
+    const redirectUrl = process.env.FRONTEND_URL || "http://localhost:5173/";
+    logger.info('Redirecting after logout', null, {
+      service: 'auth',
+      redirectUrl,
+      cookiesCleared: cookiesToClear.length,
+    });
+    
+    return res.redirect(redirectUrl);
   } catch (error) {
     logger.error("Error during logout", error as Error, { service: 'auth' });
     return res.status(500).send("Logout failed");
@@ -54,17 +112,40 @@ router.get("/logout", (req, res) => {
 router.post("/refreshToken", async (req, res) => {
   try {
     const { refreshToken } = req.body;
+    
+    logger.info('Token refresh requested', null, {
+      service: 'auth',
+      hasRefreshToken: !!refreshToken,
+      existingCookies: Object.keys(req.cookies || {}),
+      protocol: req.protocol,
+      secure: req.secure,
+    });
+    
     if (!refreshToken) {
+      logger.warn('Refresh token missing', null, { service: 'auth' });
       return res.status(400).json({ error: "Refresh token is required" });
     }
+    
     const tokenResponse = await authService.refreshToken(refreshToken);
     
-    // Get cookie options for cross-origin requests
-    const cookieOptions = getCookieOptions();
+    logger.info('New tokens generated', null, {
+      service: 'auth',
+      hasAccessToken: !!tokenResponse.access_token,
+      hasRefreshToken: !!tokenResponse.refresh_token,
+    });
+    
+    // Get cookie options for cross-origin requests (auto-detects HTTPS)
+    const cookieOptions = getCookieOptions(req);
     
     res.cookie("accessToken", tokenResponse.access_token, cookieOptions);
     res.cookie("refreshToken", tokenResponse.refresh_token, cookieOptions);
     res.cookie("expiresAt", tokenResponse.expires_in, cookieOptions);
+    
+    logger.info('Refresh tokens set as cookies', null, {
+      service: 'auth',
+      cookiesSet: ['accessToken', 'refreshToken', 'expiresAt'],
+      options: cookieOptions,
+    });
     
     return res.json({ data: tokenResponse });
   } catch (error) {
