@@ -3,6 +3,8 @@ import { logger } from './utils/logger';
 import express from 'express';
 import cors from 'cors';
 import http from 'node:http';
+import https from 'node:https';
+import fs from 'node:fs';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
@@ -30,11 +32,32 @@ import { ProvidersService } from './services/providers_service';
 import { requireAuth } from './middleware/auth.middleware';
 
 const app = express();
-const server = http.createServer(app);
+
+// Create HTTP or HTTPS server based on configuration
+let server: http.Server | https.Server;
+
+if (process.env.USE_HTTPS === 'true') {
+  // HTTPS Server
+  const httpsOptions = {
+    key: fs.readFileSync(process.env.SSL_KEY_PATH || './ssl/key.pem'),
+    cert: fs.readFileSync(process.env.SSL_CERT_PATH || './ssl/cert.pem'),
+  };
+  server = https.createServer(httpsOptions, app);
+  logger.info('HTTPS server configured', { 
+    service: 'https',
+    keyPath: process.env.SSL_KEY_PATH || './ssl/key.pem',
+    certPath: process.env.SSL_CERT_PATH || './ssl/cert.pem',
+  });
+} else {
+  // HTTP Server
+  server = http.createServer(app);
+  logger.info('HTTP server configured', { service: 'http' });
+}
 
 // Trust proxy - needed for X-Forwarded-Proto and req.secure to work correctly
-// Set to true if behind a proxy (nginx, load balancer, etc.)
-app.set('trust proxy', true);
+// Set to 1 if behind a single proxy (nginx, load balancer, etc.)
+// Set to the number of proxies in your chain
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(cors({
@@ -81,9 +104,11 @@ if (process.env.NODE_ENV !== 'production') {
 
 app.use(rateLimit({
     windowMs: process.env.RATE_LIMIT_WINDOW_MS ? Number.parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) : 15 * 60 * 1000, // 15 minutes
-    max: process.env.RATE_LIMIT_MAX ? Number.parseInt(process.env.RATE_LIMIT_MAX, 10) : 500, // limit each IP to 100 requests per windowMs
+    max: process.env.RATE_LIMIT_MAX ? Number.parseInt(process.env.RATE_LIMIT_MAX, 10) : 500, // limit each IP to 500 requests per windowMs
     standardHeaders: true, 
-    legacyHeaders: false, 
+    legacyHeaders: false,
+    // Required when trust proxy is set
+    validate: { trustProxy: false }, // Disable validation since we properly configured trust proxy
 }));
 
 // Default payload size limit: 2mb
@@ -141,15 +166,17 @@ app.use((req, res) => {
   res.status(404).json({ 
     error: 'Not found',
     path: req.path 
-  });
-});
-
-// Error handler (must be last)
-app.use(errorHandler);
-
-// Initialize and start lifecycle service for container management
-const lifecycleService = ContainerLifecycleService.getInstance();
-
+  });/HTTPS server
+    const protocol = process.env.USE_HTTPS === 'true' ? 'https' : 'http';
+    server.listen(PORT, () => {
+      logger.info('Dyad Backend Server Started', {
+        service: protocol,
+        port: PORT,
+        protocol,
+        httpApi: `${protocol}://localhost:${PORT}`,
+        sseStream: `${protocol}://localhost:${PORT}/api/stream/chat`,
+        health: `${protocol}://localhost:${PORT}/health`,
+        apiDocs: `${protocol}
 // Start server with async initialization
 const PORT = process.env.PORT || 3000;
 
@@ -192,10 +219,10 @@ async function shutdown(signal: string) {
   
   try {
     // Stop the lifecycle manager cleanup loop
-    lifecycleService.stop();
-    
-    // Close HTTP server
+    lifecycleServ/HTTPS server
     await new Promise<void>((resolve) => {
+      server.close(() => {
+        logger.info('S((resolve) => {
       server.close(() => {
         logger.info('HTTP server closed', { service: 'http' });
         resolve();
