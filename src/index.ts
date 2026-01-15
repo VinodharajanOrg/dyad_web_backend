@@ -34,14 +34,25 @@ const server = http.createServer(app);
 // Middleware
 app.use(cors({
   origin: (origin, callback) => {
-    // Always allow by reflecting the request origin
-    // If no origin header (like same-origin requests), allow it
-    callback(null, origin || true);
+    // Allow requests from frontend URL and localhost variants
+    const allowedOrigins = [
+      process.env.FRONTEND_URL || 'http://localhost:3000',
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:3001'
+    ];
+    
+    // Allow requests with no origin (like mobile apps or curl requests) or if origin is in allowed list
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, origin); // Reflect the origin for development
+    }
   },
-  credentials: true,
+  credentials: true, // Essential for cookies
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
-  exposedHeaders: ['Content-Length', 'Content-Type'],
+  exposedHeaders: ['Content-Length', 'Content-Type', 'Set-Cookie'],
   preflightContinue: false,
   optionsSuccessStatus: 204
 }));
