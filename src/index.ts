@@ -46,11 +46,17 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 app.use(express.json());
-app.use(helmet());
+
+// Configure helmet with appropriate security headers
+// Disable COOP for HTTP origins (only works with HTTPS or localhost)
+app.use(helmet({
+  crossOriginOpenerPolicy: false, // Disable COOP to prevent warnings on HTTP
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin resources
+  contentSecurityPolicy: false, // Disable CSP if it causes issues with your app
+}));
 
 app.options("*", cors());
 app.use(cookieParser());
-app.use(helmet());
 app.use(rateLimit({
     windowMs: process.env.RATE_LIMIT_WINDOW_MS ? Number.parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) : 15 * 60 * 1000, // 15 minutes
     max: process.env.RATE_LIMIT_MAX ? Number.parseInt(process.env.RATE_LIMIT_MAX, 10) : 500, // limit each IP to 100 requests per windowMs
