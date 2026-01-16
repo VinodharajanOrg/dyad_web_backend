@@ -44,6 +44,17 @@ export const cookieDebugMiddleware = (req: Request, res: Response, next: NextFun
       },
     });
     
+    // Check CORS configuration
+    const corsOrigin = req.headers.origin;
+    const expectedOrigin = process.env.FRONTEND_URL;
+    logger.info('🔍 CORS Analysis', {
+      service: 'cookie-debug',
+      requestOrigin: corsOrigin,
+      expectedFrontendUrl: expectedOrigin,
+      originMatch: corsOrigin === expectedOrigin,
+      willAllowCredentials: true,
+    });
+    
     // Log response headers after they're set
     const originalSend = res.send;
     const originalRedirect = res.redirect;
@@ -64,12 +75,14 @@ export const cookieDebugMiddleware = (req: Request, res: Response, next: NextFun
     
     res.redirect = function(statusOrUrl: any, url?: any) {
       const setCookieHeaders = res.getHeader('Set-Cookie');
+      const actualRedirectUrl = url || statusOrUrl;
+      
       if (setCookieHeaders) {
         logger.info('🍪 Cookie Debug - Outgoing Response (redirect)', {
           service: 'cookie-debug',
           path: req.path,
           statusCode: res.statusCode || 302,
-          redirectUrl: url || statusOrUrl,
+          redirectUrl: actualRedirectUrl,
           setCookieHeaders: Array.isArray(setCookieHeaders) ? setCookieHeaders : [setCookieHeaders],
           setCookieCount: Array.isArray(setCookieHeaders) ? setCookieHeaders.length : 1,
           allResponseHeaders: {
@@ -78,6 +91,30 @@ export const cookieDebugMiddleware = (req: Request, res: Response, next: NextFun
             'access-control-allow-origin': res.getHeader('access-control-allow-origin'),
             'access-control-allow-credentials': res.getHeader('access-control-allow-credentials'),
           },
+        });
+        
+        // Detailed cookie format analysis
+        const cookieArray = Array.isArray(setCookieHeaders) ? setCookieHeaders : [setCookieHeaders];
+        logger.info('🔍 Detailed Cookie Analysis', {
+          service: 'cookie-debug',
+          totalCookies: cookieArray.length,
+          cookies: cookieArray.map((cookie, idx) => {
+            const cookieStr = String(cookie);
+            return {
+              index: idx + 1,
+              name: cookieStr.split('=')[0],
+              hasSecure: cookieStr.includes('Secure'),
+              hasSameSiteNone: cookieStr.includes('SameSite=None') || cookieStr.includes('SameSite=none'),
+              hasPath: cookieStr.includes('Path=/'),
+              hasMaxAge: cookieStr.includes('Max-Age'),
+              length: cookieStr.length,
+            };
+          }),
+        });
+      } else {
+        logger.warn('⚠️  No Set-Cookie headers found in redirect response!', {
+          service: 'cookie-debug',
+          path: req.path,
         });
       }
       return originalRedirect.call(this, statusOrUrl, url);

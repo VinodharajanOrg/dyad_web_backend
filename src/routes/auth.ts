@@ -16,6 +16,26 @@ router.get("/callback", async (req: any, res) => {
   try {
     const { code } = req.query;
     
+    // Comprehensive request logging
+    logger.info('🔍 Auth Callback - Full Request Analysis', {
+      service: 'auth',
+      code: code ? '***' : 'missing',
+      protocol: req.protocol,
+      secure: req.secure,
+      forwardedProto: req.headers['x-forwarded-proto'],
+      host: req.headers.host,
+      origin: req.headers.origin,
+      referer: req.headers.referer,
+      userAgent: req.headers['user-agent'],
+      connection: req.headers.connection,
+      upgradeInsecure: req.headers['upgrade-insecure-requests'],
+      acceptLanguage: req.headers['accept-language'],
+      existingCookies: req.headers.cookie || 'none',
+      url: req.url,
+      baseUrl: req.baseUrl,
+      originalUrl: req.originalUrl,
+    });
+    
     logger.info('Auth callback received', {
       service: 'auth',
       code: code ? '***' : 'missing',
@@ -60,11 +80,80 @@ router.get("/callback", async (req: any, res) => {
       });
     });
     
+    // Log actual Set-Cookie headers before redirect
+    const setCookieHeaders = res.getHeader('Set-Cookie');
+    logger.info('🔍 Actual Set-Cookie Headers Before Redirect', {
+      service: 'auth',
+      headers: setCookieHeaders,
+      headerCount: Array.isArray(setCookieHeaders) ? setCookieHeaders.length : (setCookieHeaders ? 1 : 0),
+    });
+    
+    // Log all response headers for debugging
+    const allHeaders = {
+      'set-cookie': res.getHeader('Set-Cookie'),
+      'access-control-allow-origin': res.getHeader('Access-Control-Allow-Origin'),
+      'access-control-allow-credentials': res.getHeader('Access-Control-Allow-Credentials'),
+      'location': res.getHeader('Location'),
+      'content-type': res.getHeader('Content-Type'),
+      'cache-control': res.getHeader('Cache-Control'),
+    };
+    
+    logger.info('🔍 All Response Headers Before Redirect', {
+      service: 'auth',
+      statusCode: res.statusCode || 302,
+      headers: allHeaders,
+    });
+    
+    // Validate cookie format
+    if (Array.isArray(setCookieHeaders)) {
+      setCookieHeaders.forEach((header, index) => {
+        const hasSecure = header.includes('Secure');
+        const hasSameSite = header.includes('SameSite');
+        const sameSiteValue = header.match(/SameSite=(\w+)/)?.[1];
+        const hasPath = header.includes('Path=/');
+        const hasMaxAge = header.includes('Max-Age');
+        const cookieName = header.split('=')[0];
+        
+        logger.info(`🔍 Cookie Header Validation [${index + 1}/${setCookieHeaders.length}]`, {
+          service: 'auth',
+          cookieName,
+          hasSecure,
+          hasSameSite,
+          sameSiteValue,
+          hasPath,
+          hasMaxAge,
+          headerLength: header.length,
+          headerPreview: header.substring(0, 100) + '...',
+        });
+      });
+    }
+    
     const redirectUrl = process.env.FRONTEND_URL || "http://localhost:3000/";
     logger.info('Redirecting after auth', {
       service: 'auth',
       redirectUrl,
       cookiesSet: cookiesToSet.length,
+    });
+    
+    // Check for potential cross-origin issues
+    const requestOrigin = req.headers.origin || req.headers.referer;
+    const redirectOrigin = new URL(redirectUrl).origin;
+    const isCrossOrigin = requestOrigin && !requestOrigin.includes(redirectOrigin);
+    
+    if (isCrossOrigin) {
+      logger.warn('⚠️  Cross-Origin Redirect Detected', {
+        service: 'auth',
+        requestOrigin,
+        redirectOrigin,
+        warning: 'Cookies may be blocked by browser due to cross-origin redirect. Ensure certificate is trusted.',
+      });
+    }
+    
+    logger.info('🚀 Sending Redirect Response', {
+      service: 'auth',
+      statusCode: 302,
+      location: redirectUrl,
+      cookieCount: cookiesToSet.length,
     });
     
     return res.redirect(redirectUrl);
