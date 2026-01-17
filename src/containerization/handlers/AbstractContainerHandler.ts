@@ -146,6 +146,7 @@ export abstract class AbstractContainerHandler implements IContainerEngine {
       PORT: port.toString(),
       VITE_PORT: port.toString(),
       PNPM_STORE_PATH: '/app/.pnpm-store',
+      CI: 'true', // Required for pnpm to work in non-interactive mode
       ...customEnv,
     };
 

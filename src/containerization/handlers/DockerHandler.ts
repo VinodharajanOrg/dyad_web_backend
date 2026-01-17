@@ -147,9 +147,17 @@ export class DockerHandler extends AbstractContainerHandler {
       // Determine the correct app path for volume mounting
       // When running in Docker, we need to use the host path, not the container path
       let mountPath = options.appPath;
-      if (process.env.NODE_ENV === 'production' && process.env.HOST_APPS_BASE_DIR && process.env.APPS_BASE_DIR) {
+      if (process.env.HOST_APPS_BASE_DIR && process.env.APPS_BASE_DIR) {
         // Replace container path with host path
         mountPath = options.appPath.replace(process.env.APPS_BASE_DIR, process.env.HOST_APPS_BASE_DIR);
+        logger.debug('Path mapping for Docker volume mount', {
+          engine: 'docker',
+          appId: options.appId,
+          originalPath: options.appPath,
+          mountPath: mountPath,
+          appsBaseDir: process.env.APPS_BASE_DIR,
+          hostAppsBaseDir: process.env.HOST_APPS_BASE_DIR
+        });
       }
 
       // Build docker run command using base class helpers

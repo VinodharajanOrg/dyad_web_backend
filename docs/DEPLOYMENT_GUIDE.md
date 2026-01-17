@@ -492,7 +492,7 @@ heroku create dyad-backend-prod
 heroku addons:create heroku-postgresql:standard-0
 
 # Set environment variables
-heroku config:set NODE_ENV=production
+heroku config:set =production
 heroku config:set OPENAI_API_KEY=your-key
 # ... set all other env vars
 

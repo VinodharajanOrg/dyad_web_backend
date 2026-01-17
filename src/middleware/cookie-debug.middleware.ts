@@ -75,7 +75,9 @@ export const cookieDebugMiddleware = (req: Request, res: Response, next: NextFun
     
     res.redirect = function(statusOrUrl: any, url?: any) {
       const setCookieHeaders = res.getHeader('Set-Cookie');
-      const actualRedirectUrl = url || statusOrUrl;
+      // Determine if first argument is status code or URL
+      const isStatusCode = typeof statusOrUrl === 'number';
+      const actualRedirectUrl = isStatusCode ? url : statusOrUrl;
       
       if (setCookieHeaders) {
         logger.info('🍪 Cookie Debug - Outgoing Response (redirect)', {
@@ -117,7 +119,15 @@ export const cookieDebugMiddleware = (req: Request, res: Response, next: NextFun
           path: req.path,
         });
       }
-      return originalRedirect.call(this, statusOrUrl, url);
+      // Call original redirect - Express 4 redirect signature is: redirect(url: string) or redirect(status: number, url: string)
+      // But TypeScript types may not reflect overloads correctly, so we use any
+      if (url !== undefined) {
+        // Called with status code: res.redirect(status, url)
+        return (originalRedirect as any).call(this, statusOrUrl, url);
+      } else {
+        // Called with just URL: res.redirect(url)  
+        return (originalRedirect as any).call(this, statusOrUrl);
+      }
     };
   }
   

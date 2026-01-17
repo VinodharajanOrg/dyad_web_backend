@@ -8,8 +8,15 @@ const router = express.Router();
 
 //redirect logind:\work\POC\dyad\backend\src\routes\auth.ts
 router.get("/login", (req, res) => {
-  const url = authService.getLoginUrl();
-  return res.redirect(url);
+  try {
+    const url = authService.getLoginUrl();
+    logger.info('Auth login redirect', { service: 'auth', redirectUrl: url });
+    return res.redirect(url);
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    logger.error('Error generating login URL', error, { service: 'auth' });
+    return res.status(500).json({ error: 'Failed to generate login URL', message: error.message });
+  }
 });
 //callback
 router.get("/callback", async (req: any, res) => {
@@ -145,8 +152,26 @@ router.get("/callback", async (req: any, res) => {
         service: 'auth',
         requestOrigin,
         redirectOrigin,
-        warning: 'Cookies may be blocked by browser due to cross-origin redirect. Ensure certificate is trusted.',
+        warning: 'Cookies may be blocked by browser. CRITICAL: User must trust the SSL certificate by visiting the backend URL directly first!',
+        solution: `Visit https://10.157.150.207:3001/health in browser and accept the certificate warning before testing login.`,
       });
+    }
+    
+    // Check if this is likely to fail
+    const backendHost = req.headers.host;
+    const frontendHost = new URL(redirectUrl).host;
+    if (backendHost !== frontendHost) {
+      logger.error(
+        '🚨 COOKIE BLOCKING LIKELY - Different Hosts',
+        undefined,
+        { service: 'auth' },
+        {
+          backendHost,
+          frontendHost,
+          issue: 'Cookies set on one host cannot be read by another host',
+          solution: 'User MUST visit backend URL and trust certificate: https://' + backendHost + '/health',
+        }
+      );
     }
     
     logger.info('🚀 Sending Redirect Response', {
@@ -158,6 +183,7 @@ router.get("/callback", async (req: any, res) => {
     
     return res.redirect(redirectUrl);
   } catch (error) {
+    logger.error('Auth callback error', error instanceof Error ? error : new Error(String(error)), { service: 'auth' });
     return res.status(500).send("Authentication failed");
   }
 });

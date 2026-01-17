@@ -73,3 +73,4 @@ scripts/fast-sonar-scan.ps1
 
 # Environment variables
 .env
+ssl/
