@@ -177,11 +177,15 @@ export class DockerHandler extends AbstractContainerHandler {
       const cpuLimit = options.cpuLimit || process.env.CONTAINER_CPU_LIMIT || '1';
       const memoryLimit = options.memoryLimit || process.env.CONTAINER_MEMORY_LIMIT || '1g';
 
-      const runCommand = `docker run -d --name ${containerName} -p ${port}:${port} --cpus="${cpuLimit}" --memory="${memoryLimit}" ${envFlags} ${volumeFlags} -w /app ${this.dockerImage} sh -c "${escapedScript}"`;
+      // Get Docker network to connect container (defaults to dyad-network for nginx access)
+      const dockerNetwork = process.env.DOCKER_NETWORK || 'dyad-network';
+
+      const runCommand = `docker run -d --name ${containerName} --network ${dockerNetwork} -p ${port}:${port} --cpus="${cpuLimit}" --memory="${memoryLimit}" ${envFlags} ${volumeFlags} -w /app ${this.dockerImage} sh -c "${escapedScript}"`;
 
       logger.debug('Executing docker run command', {
         engine: 'docker',
         appId: options.appId,
+        network: dockerNetwork,
         command: runCommand
       });
 
@@ -192,6 +196,7 @@ export class DockerHandler extends AbstractContainerHandler {
         engine: 'docker', 
         appId: options.appId, 
         containerName,
+        network: dockerNetwork,
         port 
       });
 
