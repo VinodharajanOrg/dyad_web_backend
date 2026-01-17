@@ -33,12 +33,26 @@ export class AppService {
 
   /**
    * Get the full absolute path for an app
+   * Handles both old format (full paths) and new format (relative paths)
    */
   getFullAppPath(appPath: string): string {
     const baseDir = this.getAppsBaseDir();
-    return path.isAbsolute(appPath)
-      ? appPath
-      : path.resolve(process.cwd(), baseDir, appPath);
+    
+    // If the path is already absolute and starts with APPS_BASE_DIR, it's in old format
+    // Extract just the app name and resolve it properly
+    if (path.isAbsolute(appPath) && appPath.startsWith('/app/apps/')) {
+      // Old format: /app/apps/magical-dolphin-skip -> magical-dolphin-skip
+      const appName = appPath.replace('/app/apps/', '');
+      return path.resolve(process.cwd(), baseDir, appName);
+    }
+    
+    // Handle absolute paths (custom locations)
+    if (path.isAbsolute(appPath)) {
+      return appPath;
+    }
+    
+    // Handle relative paths (new format)
+    return path.resolve(process.cwd(), baseDir, appPath);
   }
 
   async listApps(userId: string) {
@@ -132,12 +146,14 @@ export class AppService {
         startCommand = "pnpm dev";
       }
 
+      // Store only the relative app name in database, not the full path
+      // This allows the path to be resolved dynamically based on environment
       const [app] = await db
         .insert(apps)
         .values({
           user_id: data.userId,
           name: data.name,
-          path: fullPath,
+          path: relativePath,  // Store relative path instead of fullPath
           installCommand: installCommand,
           startCommand: startCommand,
           createdAt: new Date(),
