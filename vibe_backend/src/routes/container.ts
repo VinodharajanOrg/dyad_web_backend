@@ -129,13 +129,22 @@ router.post('/:appId/run',requireAuth,validate(appIdField, 'params'), async (req
     if (isRunning) {
       lifecycleService.recordActivity(appId);
       const status = await containerService.getContainerStatus(appId);
+      
+      // Get server URL for container access (use FRONTEND_URL or localhost)
+      const serverUrl = process.env.FRONTEND_URL 
+        ? new URL(process.env.FRONTEND_URL).hostname 
+        : 'localhost';
+      const containerPort = status.port || lifecycleService.getPort(appId) || 32100;
+      const containerUrl = `http://${serverUrl}:${containerPort}`;
+      
       return res.json({
         success: true,
         message: `App ${appId} is already running`,
         data: {
           appId,
           containerName: status.containerName || `dyad-app-${appId}`,
-          port: status.port || lifecycleService.getPort(appId) || 32100,
+          port: containerPort,
+          url: containerUrl,
         },
       });
     }
@@ -187,6 +196,13 @@ router.post('/:appId/run',requireAuth,validate(appIdField, 'params'), async (req
       lifecycleService.markAsStarted(appId);
       
       const status = await containerService.getContainerStatus(appId);
+      
+      // Get server URL for container access (use FRONTEND_URL or localhost)
+      const serverUrl = process.env.FRONTEND_URL 
+        ? new URL(process.env.FRONTEND_URL).hostname 
+        : 'localhost';
+      const containerPort = status.port || port;
+      const containerUrl = `http://${serverUrl}:${containerPort}`;
 
       res.json({
         success: true,
@@ -194,7 +210,8 @@ router.post('/:appId/run',requireAuth,validate(appIdField, 'params'), async (req
         data: {
           appId,
           containerName: status.containerName || `dyad-app-${appId}`,
-          port: status.port || port,
+          port: containerPort,
+          url: containerUrl,
         },
       });
     } catch (error) {
