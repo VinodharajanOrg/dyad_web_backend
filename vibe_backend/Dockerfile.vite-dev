@@ -1,0 +1,46 @@
+# Custom optimized image for Vite development containers
+# This image includes all build tools and pre-configured environment
+# Build: podman build -f Dockerfile.vite-dev -t dyad-vite-dev:latest .
+
+# Use Debian-based image (has build tools, better compatibility than alpine)
+FROM node:22-bookworm-slim
+
+# Install build dependencies and tools needed for native modules
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    git \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pnpm globally and configure
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Pre-configure environment
+ENV PNPM_HOME=/root/.local/share/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+ENV NODE_ENV=development
+ENV CHOKIDAR_USEPOLLING=true
+
+# Create app directory
+WORKDIR /app
+
+# Set up pnpm store directory
+RUN mkdir -p /app/.pnpm-store
+ENV PNPM_STORE_PATH=/app/.pnpm-store
+
+# Increase inotify watches for file watching (hot reload)
+RUN echo "fs.inotify.max_user_watches=524288" >> /etc/sysctl.conf || true
+
+# Pre-install all scaffold template dependencies for instant startup
+# This caches the exact dependencies used in the default template
+COPY scaffold/package.json scaffold/pnpm-lock.yaml* /tmp/scaffold/
+RUN cd /tmp/scaffold && \
+    pnpm install --prefer-offline && \
+    echo "Template dependencies cached in pnpm store" && \
+    cd / && rm -rf /tmp/scaffold
+
+# Default command
+CMD ["sh"]

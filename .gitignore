@@ -1,0 +1,26 @@
+# Unified Nginx Setup - Git Ignore
+
+# SSL Certificates (keep structure, ignore actual certs)
+ssl/*.pem
+ssl/*.key
+ssl/*.crt
+
+# Logs
+logs/nginx/*.log
+logs/nginx/*.gz
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Docker volumes
+postgres_data/
+
+# macOS
+.DS_Store
+
+# Temporary files
+*.swp
+*.swo
+*~

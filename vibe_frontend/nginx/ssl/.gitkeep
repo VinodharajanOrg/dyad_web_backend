@@ -1,0 +1,3 @@
+# SSL certificates will be stored here
+# Run: ../scripts/generate-ssl-certs.sh to generate self-signed certificates
+# Or place your own cert.pem and key.pem files here
