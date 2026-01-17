@@ -1,0 +1,56 @@
+# Dependencies
+node_modules
+npm-debug.log
+package-lock.json
+
+# Build outputs
+.next
+out
+dist
+build
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.production
+env.local
+
+# Testing
+coverage
+.nyc_output
+e2e-tests
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+.github
+
+# Documentation
+*.md
+!README.md
+docs
+
+# Logs
+logs
+*.log
+
+# User data
+userData
+
+# Misc
+.eslintcache
+.prettierrc
+playwright.config.ts
+vitest.config.ts

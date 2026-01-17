@@ -1,6 +1,0 @@
-# Placeholder for SSL certificates
-# Follow instructions in SSL_SETUP.md to generate or copy certificates
-
-# Required files:
-# - cert.pem (SSL certificate)
-# - key.pem (Private key)

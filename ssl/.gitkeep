@@ -1,0 +1,7 @@
+# This file ensures the SSL directory is tracked by git
+# Actual certificate files are ignored via .gitignore
+
+# To generate certificates:
+# openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+#   -keyout key.pem -out cert.pem \
+#   -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"

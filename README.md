@@ -1,371 +1,357 @@
-# Dyad Backend Server
+# Unified Nginx Setup for Dyad Frontend & Backend
 
-A standalone Express.js backend for Dyad, migrated from Electron IPC architecture to a web-based REST API with WebSocket support.
+This directory contains a unified nginx configuration that serves both the Dyad frontend (Next.js) and backend (Express) applications through a single reverse proxy with shared SSL certificates.
 
-## 🚀 Features
+## Architecture
 
-- ✅ **PostgreSQL Database** - Using Drizzle ORM with postgres.js driver
-- ✅ **REST API** - Express.js endpoints for apps, chats, files, and git operations
-- ✅ **SSE Streaming** - Server-Sent Events for real-time AI responses
-- ✅ **Docker Support** - Run generated apps in isolated containers (same as Dyad Desktop)
-- ✅ **Git Integration** - isomorphic-git for version control
-- ✅ **File Management** - Secure file operations with path traversal protection
-- ✅ **Multi-AI Provider** - OpenAI, Anthropic, Google Gemini support
-- ✅ **TypeScript** - Full type safety
+```
+                                    ┌─────────────────┐
+                                    │   Nginx Proxy   │
+                                    │   Port 80/443   │
+                                    └────────┬────────┘
+                                            │
+                        ┌───────────────────┴───────────────────┐
+                        │                                       │
+                   ┌────▼─────┐                          ┌─────▼────┐
+                   │ Frontend │                          │ Backend  │
+                   │ Next.js  │                          │ Express  │
+                   │ Port 3000│                          │ Port 3001│
+                   └──────────┘                          └──────────┘
+```
 
-## Tech Stack
+## Directory Structure
 
-- **Runtime**: Node.js 18+
-- **Framework**: Express.js 4.18
-- **Database**: PostgreSQL 14+ with Drizzle ORM
-- **WebSocket**: ws 8.14
-- **Git**: isomorphic-git 1.25
-- **TypeScript**: 5.3
+```
+github/
+├── docker-compose.yml          # Unified docker compose for all services
+├── ssl/                        # Common SSL certificates directory
+│   ├── cert.pem
+│   └── key.pem
+├── nginx/
+│   └── nginx.conf             # Unified nginx configuration
+├── logs/
+│   └── nginx/                 # Nginx access and error logs
+├── dyad_web_backend/          # Backend application
+└── dyad-web/                  # Frontend application
+```
+
+## Features
+
+### Unified Routing
+- **Frontend**: `https://localhost/` - Serves the Next.js application
+- **Backend API**: `https://localhost/api/*` - Proxies to backend Express API
+- **API Docs**: `https://localhost/api-docs` - Swagger documentation
+- **Container Previews**: `https://localhost/app/preview/:id` - Container preview endpoints
+- **Health Check**: `https://localhost/health` - System health status
+
+### Security Features
+- ✅ Automatic HTTP to HTTPS redirect
+- ✅ SSL/TLS 1.2 and 1.3 support
+- ✅ Strong cipher configuration
+- ✅ Security headers (HSTS, X-Frame-Options, CSP, etc.)
+- ✅ Rate limiting for API endpoints
+- ✅ Shared SSL certificate management
+
+### Performance Optimization
+- ✅ Gzip compression for all text-based content
+- ✅ Static asset caching for Next.js files
+- ✅ HTTP/2 support
+- ✅ Connection keepalive
+- ✅ Optimized buffer sizes
+
+### WebSocket Support
+- ✅ WebSocket connections for real-time features
+- ✅ Hot Module Replacement (HMR) for development
+- ✅ Server-Sent Events (SSE) for streaming
 
 ## Quick Start
 
-### 1. Install Dependencies
+### 1. Setup SSL Certificates
+
+Generate self-signed certificates for development:
 
 ```bash
-npm install
+cd ssl
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout key.pem -out cert.pem \
+  -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
 ```
 
-### 2. Set up PostgreSQL
-
-See [POSTGRESQL_SETUP.md](./POSTGRESQL_SETUP.md) for detailed PostgreSQL setup instructions.
-
-**Quick version:**
-```bash
-# Create database
-psql postgres -c "CREATE DATABASE dyad;"
-psql postgres -c "CREATE USER dyad_user WITH PASSWORD 'your_password';"
-psql postgres -c "GRANT ALL PRIVILEGES ON DATABASE dyad TO dyad_user;"
-```
-
-### 3. Configure Environment
+Or copy existing certificates:
 
 ```bash
-cp .env.example .env
+# Copy from backend SSL directory
+cp dyad_web_backend/ssl/cert.pem ssl/
+cp dyad_web_backend/ssl/key.pem ssl/
+
+# Or from frontend SSL directory
+cp dyad-web/nginx/ssl/cert.pem ssl/
+cp dyad-web/nginx/ssl/key.pem ssl/
 ```
 
-Edit `.env`:
+### 2. Configure Environment Variables
+
+Create environment files if they don't exist:
+
+**Backend (.env in dyad_web_backend/):**
 ```env
-DATABASE_URL=postgresql://dyad_user:your_password@localhost:5432/dyad
+NODE_ENV=production
 PORT=3001
-CORS_ORIGIN=http://localhost:5173
-DATA_DIR=./data/apps
+DATABASE_URL=postgresql://user:password@your-db-host:5432/dyad
+USE_HTTPS=true
+SSL_KEY_PATH=/app/ssl/key.pem
+SSL_CERT_PATH=/app/ssl/cert.pem
+# Add other backend environment variables as needed
 ```
 
-### 4. Initialize Database
-
-```bash
-# Push schema to PostgreSQL (quickest)
-npm run db:push
-
-# OR generate and run migrations
-npm run db:generate
-npm run db:migrate
-```
-
-### 5. Start Development Server
-
-```bash
-npm run dev
-```
-
-Server runs at `http://localhost:3001` ✨
-
-## 📡 API Endpoints
-
-### Apps
-- `GET /api/apps` - List all apps
-- `GET /api/apps/:id` - Get app by ID
-- `POST /api/apps` - Create new app
-- `PUT /api/apps/:id` - Update app
-- `DELETE /api/apps/:id` - Delete app
-- `POST /api/apps/:id/favorite` - Toggle favorite
-
-### Chats
-- `GET /api/chats?appId=xxx` - List chats for app
-- `GET /api/chats/:id` - Get chat with messages
-- `POST /api/chats` - Create new chat
-- `DELETE /api/chats/:id` - Delete chat
-- `POST /api/chats/:chatId/messages` - Create message
-- `PUT /api/chats/:chatId/messages/:messageId` - Update message
-
-### Files
-- `GET /api/files/:appId?path=xxx` - List files in app
-- `GET /api/files/:appId/read?path=xxx` - Read file
-- `POST /api/files/:appId/write` - Write file
-- `DELETE /api/files/:appId?path=xxx` - Delete file
-- `POST /api/files/:appId/mkdir` - Create directory
-
-### Git
-- `POST /api/git/:appId/init` - Initialize git repo
-- `POST /api/git/:appId/clone` - Clone repository
-- `POST /api/git/:appId/add` - Stage files
-- `POST /api/git/:appId/commit` - Create commit
-- `GET /api/git/:appId/log` - Get commit history
-- `GET /api/git/:appId/status` - Get git status
-- `POST /api/git/:appId/checkout` - Checkout branch
-
-### Docker
-- `POST /api/apps/:appId/run` - Run app in Docker container
-- `POST /api/apps/:appId/stop` - Stop Docker container
-- `GET /api/apps/:appId/status` - Check if app is running
-- `POST /api/apps/:appId/cleanup` - Remove Docker volumes
-- `GET /api/docker/status` - Get Docker service status
-
-### Streaming
-- `POST /api/stream/chat` - SSE endpoint for AI responses
-- `POST /api/stream/chat/:chatId/cancel` - Cancel active stream
-
-## 🐳 Docker/Podman Integration
-
-The backend supports running generated apps in containers (Docker or Podman), identical to Dyad Desktop.
-
-### Quick Setup
-
-**Basic configuration (.env):**
+**Frontend (env.local in dyad-web/):**
 ```env
-CONTAINERIZATION_ENABLED=true
-CONTAINERIZATION_ENGINE=podman  # or docker
-PODMAN_IMAGE=node:22-bookworm-slim
-CONTAINER_INACTIVITY_TIMEOUT=300000  # 5 minutes
+NODE_ENV=production
+NEXT_PUBLIC_API_URL=https://localhost/api
+# Add other frontend environment variables as needed
+NODE_TLS_REJECT_UNAUTHORIZED=0
 ```
 
-### ⚡ Performance Optimization (Recommended)
+### 3. Start All Services
 
-For **95% faster container startup** (3-5s instead of 30-40s), build the optimized image:
+From the root directory (`github/`):
 
 ```bash
-# Build custom image with pre-cached dependencies (one-time, 3-5 min)
-./scripts/build-optimized-image.sh
+# Build and start all services
+docker-compose up -d
 
-# Update .env to use optimized image
-PODMAN_IMAGE=dyad-vite-dev:latest
+# View logs
+docker-compose logs -f
+
+# Check service status
+docker-compose ps
 ```
 
-**Performance comparison:**
-- First start: **3-5s** (was 30-40s) ⚡
-- Restart: **2-3s** (was 5-10s) ⚡
-- Zero dependency installation for new apps!
+### 4. Access the Application
 
-### Documentation
+- **Frontend**: https://localhost
+- **Backend API**: https://localhost/api
+- **API Documentation**: https://localhost/api-docs
+- **Health Check**: https://localhost/health
 
-- [Container Startup Optimization](./docs/CONTAINER_STARTUP_OPTIMIZATION.md) - Full optimization guide
-- [Custom Image README](./docs/CUSTOM_IMAGE_README.md) - Pre-cached image details
-- [Quick Start](./docs/CONTAINER_STARTUP_QUICKSTART.md) - Setup and testing
-- [Container Auto-shutdown](./docs/CONTAINER_AUTO_SHUTDOWN.md) - Lifecycle management
-- [Docker Integration](./docs/DOCKER.md) - Detailed Docker/Podman setup
+## Service Management
 
-### Test Container System
+### Start Services
 ```bash
-node test_docker.js
+docker-compose up -d
 ```
 
-## 🗄️ Database Management
-
-### Drizzle Studio (Visual Editor)
+### Stop Services
 ```bash
-npm run db:studio
+docker-compose down
 ```
-Opens at `https://local.drizzle.studio`
 
-### Migrations
+### Restart Nginx Only
 ```bash
-# Generate migration files from schema
-npm run db:generate
-
-# Apply migrations to database
-npm run db:migrate
-
-# Push schema directly (dev only)
-npm run db:push
+docker-compose restart nginx
 ```
 
-### Migrate from SQLite
-
-If you have existing SQLite data from the Electron app:
-
-1. Install better-sqlite3 temporarily:
-   ```bash
-   npm install better-sqlite3
-   ```
-
-2. Edit `scripts/migrate-sqlite-to-postgres.ts`:
-   - Update `SQLITE_PATH` to your SQLite database
-   - Adjust field mappings to match your schema
-
-3. Run migration:
-   ```bash
-   npx tsx scripts/migrate-sqlite-to-postgres.ts
-   ```
-
-4. Remove better-sqlite3:
-   ```bash
-   npm uninstall better-sqlite3
-   ```
-
-## 📁 Project Structure
-
-```
-backend/
-├── src/
-│   ├── db/
-│   │   ├── index.ts           # PostgreSQL connection
-│   │   └── schema.ts          # Drizzle schema
-│   ├── routes/
-│   │   ├── app_routes.ts      # App CRUD endpoints
-│   │   ├── chat_routes.ts     # Chat & message endpoints
-│   │   ├── file_routes.ts     # File operations
-│   │   └── git_routes.ts      # Git operations
-│   ├── services/
-│   │   ├── app_service.ts     # App business logic
-│   │   ├── chat_service.ts    # Chat business logic
-│   │   ├── file_service.ts    # File system operations
-│   │   └── git_service.ts     # Git operations
-│   ├── websocket/
-│   │   └── index.ts           # WebSocket server
-│   ├── middleware/
-│   │   └── errorHandler.ts    # Error handling
-│   └── index.ts               # Express app entry
-├── scripts/
-│   └── migrate-sqlite-to-postgres.ts
-├── drizzle.config.ts          # Drizzle Kit config
-├── package.json
-├── tsconfig.json
-├── .env.example
-├── README.md
-└── POSTGRESQL_SETUP.md
-```
-
-## 🔧 Development
-
-### Run Development Server
+### View Logs
 ```bash
-npm run dev
-```
-Uses `tsx watch` for hot reload
+# All services
+docker-compose logs -f
 
-### Build for Production
+# Specific service
+docker-compose logs -f nginx
+docker-compose logs -f backend
+docker-compose logs -f frontend
+```
+
+### Rebuild Services
 ```bash
-npm run build
-```
-Outputs to `dist/`
+# Rebuild all
+docker-compose up -d --build
 
-### Run Production Build
+# Rebuild specific service
+docker-compose up -d --build backend
+```
+
+## Configuration Details
+
+### Rate Limiting
+
+The nginx configuration includes rate limiting to protect your services:
+
+- **API endpoints** (`/api/*`): 10 requests/second with burst of 20
+- **Container previews** (`/app/preview/*`): 30 requests/second with burst of 50
+- **General traffic** (`/*`): 50 requests/second with burst of 100
+
+### SSL Configuration
+
+The unified setup uses a common SSL directory (`ssl/`) mounted to all services:
+- Nginx: `/etc/nginx/ssl`
+- Backend: `/app/ssl`
+- Frontend: `/app/ssl`
+
+This ensures all services use the same certificates, simplifying management.
+
+### Logging
+
+Nginx logs are stored in `logs/nginx/`:
+- `access.log` - All HTTP requests
+- `error.log` - Errors and warnings
+
+## Production Deployment
+
+### Using Let's Encrypt
+
+For production, use Let's Encrypt for free SSL certificates:
+
+1. Uncomment the `certbot` service in `docker-compose.yml`
+
+2. Update the nginx configuration to use Let's Encrypt certificates:
+```nginx
+ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+```
+
+3. Obtain certificates:
 ```bash
-npm start
+docker-compose run --rm certbot certonly \
+  --webroot \
+  --webroot-path=/var/www/certbot \
+  -d yourdomain.com \
+  -d www.yourdomain.com
 ```
 
-### Type Check
+### Security Checklist
+
+- [ ] Replace self-signed certificates with valid SSL certificates
+- [ ] Update `server_name` in nginx.conf with your domain
+- [ ] Set strong database passwords
+- [ ] Enable firewall rules (allow only 80, 443)
+- [ ] Set `NODE_TLS_REJECT_UNAUTHORIZED=1` in production
+- [ ] Review and adjust rate limiting thresholds
+- [ ] Configure proper CORS settings in backend
+- [ ] Enable nginx access log rotation
+- [ ] Set up monitoring and alerts
+
+## Troubleshooting
+
+### Port Conflicts
+
+If you get port binding errors:
 ```bash
-npm run typecheck
+# Check what's using the port
+sudo lsof -i :80
+sudo lsof -i :443
+
+# Stop other nginx instances
+sudo systemctl stop nginx
+
+# Or change ports in docker-compose.yml
+ports:
+  - "8080:80"   # Changed from 80:80
+  - "8443:443"  # Changed from 443:443
 ```
 
-## 🔐 Environment Variables
+### SSL Certificate Errors
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | **Required** |
-| `PORT` | Server port | `3001` |
-| `NODE_ENV` | Environment | `development` |
-| `CORS_ORIGIN` | Frontend URL for CORS | `http://localhost:5173` |
-| `DATA_DIR` | File storage directory | `./data/apps` |
+If browsers show certificate warnings:
+- **Development**: This is normal with self-signed certificates. Click "Advanced" and "Proceed to localhost"
+- **Production**: Ensure you're using valid certificates from a trusted CA
 
-## ⚠️ Error Handling
+### Service Connection Issues
 
-All endpoints return errors in this format:
-```json
-{
-  "error": "Error message",
-  "statusCode": 400
+Check if all services are healthy:
+```bash
+docker-compose ps
+docker-compose logs backend
+docker-compose logs frontend
+```
+
+Test endpoints individually:
+```bash
+# Test backend directly
+curl http://localhost:3001/health
+
+# Test frontend directly
+curl http://localhost:3000
+
+# Test through nginx
+curl -k https://localhost/health
+curl -k https://localhost/api/health
+```
+
+### Nginx Configuration Syntax
+
+Test nginx configuration before restarting:
+```bash
+docker-compose exec nginx nginx -t
+```
+
+Reload nginx without downtime:
+```bash
+docker-compose exec nginx nginx -s reload
+```
+
+## Migration from Separate Nginx Instances
+
+If you're migrating from the separate nginx setups:
+
+1. **Backup existing configurations**:
+```bash
+cp dyad_web_backend/nginx/nginx.conf dyad_web_backend/nginx/nginx.conf.backup
+cp dyad-web/nginx/nginx.conf dyad-web/nginx/nginx.conf.backup
+```
+
+2. **Stop old services**:
+```bash
+cd dyad_web_backend/nginx && docker-compose down
+cd dyad-web && docker-compose down
+```
+
+3. **Use the unified setup**:
+```bash
+cd github/
+docker-compose up -d
+```
+
+## Performance Tuning
+
+### For High Traffic
+
+Adjust these values in `nginx/nginx.conf`:
+
+```nginx
+worker_processes auto;  # Or specific number based on CPU cores
+worker_connections 2048;  # Increase from 1024
+
+# Adjust rate limits
+limit_req_zone $binary_remote_addr zone=api_limit:10m rate=50r/s;
+```
+
+### For Large File Uploads
+
+```nginx
+client_max_body_size 500M;  # Default is 100M
+```
+
+### Connection Pooling
+
+```nginx
+upstream backend_api {
+    server backend:3001;
+    keepalive 64;  # Increase from 32
 }
 ```
 
-Common status codes:
-- `400` - Bad Request (validation errors)
-- `404` - Not Found
-- `500` - Internal Server Error
+## Support
 
-## 🔒 Security
+For issues or questions:
+1. Check the logs: `docker-compose logs -f`
+2. Verify all services are healthy: `docker-compose ps`
+3. Test the health endpoint: `curl -k https://localhost/health`
+4. Review nginx error logs: `tail -f logs/nginx/error.log`
 
-- ✅ CORS enabled for specified origin
-- ✅ Path traversal protection in file operations
-- ✅ SQL injection protection (Drizzle ORM)
-- ✅ Foreign key constraints for data integrity
-- ⚠️ No authentication yet (add as needed)
+## Related Documentation
 
-## 📝 Migration Notes
-
-### SQLite → PostgreSQL Changes
-
-1. **ID Generation**
-   - Before: Manual UUID generation
-   - After: PostgreSQL `serial` (auto-increment)
-
-2. **Timestamps**
-   - Before: Unix epoch integers
-   - After: PostgreSQL `timestamp` with `Date` objects
-
-3. **Booleans**
-   - Before: Integer (0/1)
-   - After: Native PostgreSQL `boolean`
-
-4. **JSON Data**
-   - Before: TEXT with JSON strings
-   - After: `jsonb` for better querying
-
-5. **Foreign Keys**
-   - Before: No enforcement
-   - After: Enforced with cascading deletes
-
-### Electron IPC → REST API Mapping
-
-| Electron IPC | Backend API |
-|--------------|-------------|
-| `app:list` | `GET /api/apps` |
-| `app:create` | `POST /api/apps` |
-| `chat:stream` | WebSocket event |
-| `file:read` | `GET /api/files/:appId/read` |
-| `git:commit` | `POST /api/git/:appId/commit` |
-
-All business logic from `src/ipc/handlers/*` has been migrated to `src/services/*`.
-
-## 🐛 Troubleshooting
-
-### Cannot connect to PostgreSQL
-- Check if PostgreSQL is running: `brew services list`
-- Verify credentials in `.env`
-- Test connection: `psql -U dyad_user -d dyad`
-
-### Port already in use
-Change `PORT` in `.env` or kill process:
-```bash
-lsof -ti:3001 | xargs kill -9
-```
-
-### Database schema out of sync
-```bash
-npm run db:push
-```
-
-### Drizzle Studio won't open
-Make sure database is accessible and `DATABASE_URL` is correct.
-
-## 🛣️ Roadmap
-
-- ✅ Basic REST API for apps, chats, files, git
-- ✅ WebSocket for real-time communication  
-- ✅ PostgreSQL database with Drizzle ORM
-- ⏳ Implement actual LLM streaming
-- ⏳ Add process management for running apps
-- ⏳ Add settings, providers, MCP routes
-- ⏳ Add authentication (optional)
-- ⏳ Add tests
-- ⏳ Add Docker support
-
-## 📄 License
-
-Same as Dyad main project.
+- [Backend Architecture](dyad_web_backend/docs/ARCHITECTURE.md)
+- [Docker Setup](dyad_web_backend/docs/DOCKER_QUICK_START_GUIDE.md)
+- [API Documentation](dyad_web_backend/docs/API_DOCUMENTATION.md)
+- [Frontend Setup](dyad-web/README.md)

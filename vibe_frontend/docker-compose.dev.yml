@@ -1,0 +1,15 @@
+# Docker Compose Override for Development
+# This file provides HTTP-only setup for local development
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  frontend:
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+
+  # Disable nginx in development mode
+  nginx:
+    profiles:
+      - production
