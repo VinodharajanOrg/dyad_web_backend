@@ -79,7 +79,7 @@ services:
       KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
       KC_PROXY: "edge"
-      KC_HOSTNAME_URL: "https://${KC_HOSTNAME:-10.157.147.235}"
+      KC_HOSTNAME_URL: "https://10.157.147.235"
       KC_LOG_LEVEL: ${KC_LOG_LEVEL:-info}
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"

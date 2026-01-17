@@ -20,9 +20,6 @@ playwright/.cache/
 dist/
 
 # Environment variables
-.env
-.env*.local
-.env.production
 
 # Debug
 npm-debug.log*
