@@ -492,6 +492,7 @@ export function ImportAppDialog({
                 settings={settings}
                 refreshSettings={refreshSettings}
                 handleRepoSetupComplete={() => undefined}
+                refreshApp={() => undefined}
                 expanded={false}
               />
             ) : (
