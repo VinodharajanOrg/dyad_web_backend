@@ -4,7 +4,7 @@
  *
  * @param port - The port number from Docker status
  * @param appId - The application ID
- * @param dockerStatus - Docker status object with isReady, isRunning, and optional url
+ * @param dockerStatus - Docker status object with isReady and isRunning flags
  * @param setAppUrlObj - Setter function for the app URL atom
  */
 export function setupDockerUrlFromStatus(
@@ -19,8 +19,7 @@ export function setupDockerUrlFromStatus(
     dockerStatus?.isReady &&
     dockerStatus?.isRunning
   ) {
-    // Use URL from backend response if available, otherwise construct from port
-    const dockerUrl = dockerStatus.url || `http://${window.location.hostname}:${port}`;
+    const dockerUrl = `http://localhost:${port}`;
     setAppUrlObj({
       appUrl: dockerUrl,
       appId: appId,

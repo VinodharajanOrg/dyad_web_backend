@@ -14,55 +14,62 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-
+ 
 import { useRunApp } from "@/hooks/useRunApp";
+import { useVersions } from "@/hooks/useVersions";
 interface VersionPaneProps {
   isVisible: boolean;
   onClose: () => void;
 }
-
+ 
 export function VersionPane({ isVisible, onClose }: VersionPaneProps) {
   const appId = useAtomValue(selectedAppIdAtom);
   const { refreshApp, app } = useLoadApp(appId);
   const { restartApp } = useRunApp();
-  // NOTE: As of now, we are not using live versions in web mode
-  // const {
-  //   versions: liveVersions,
-  //   refreshVersions,
-  //   revertVersion,
-  //   isRevertingVersion,
-  // } = useVersions(appId);
-  const isRevertingVersion = false;
-
+  const {
+    versions: liveVersions,
+    refreshVersions,
+    revertVersion,
+    isRevertingVersion,
+  } = useVersions(appId);
+ 
   const [selectedVersionId, setSelectedVersionId] = useAtom(
     selectedVersionIdAtom,
   );
   const { checkoutVersion, isCheckingOutVersion } = useCheckoutVersion();
   const wasVisibleRef = useRef(false);
-  //const [cachedVersions,setCachedVersions] = useState<Version[]>([]);
-  const [cachedVersions] = useState<Version[]>([]);
-
+  const [cachedVersions, setCachedVersions] = useState<Version[]>([]);
+ 
   useEffect(() => {
     async function updatePaneState() {
       // When pane becomes visible after being closed
       if (isVisible && !wasVisibleRef.current) {
         if (appId) {
-          // await refreshVersions();
-          // setCachedVersions(liveVersions);
+          await refreshVersions();
+          setCachedVersions(liveVersions);
         }
       }
-
+ 
       // Reset when closing
       if (!isVisible && selectedVersionId) {
         setSelectedVersionId(null);
         if (appId) {
-          await checkoutVersion({ appId, versionId: "main" });
-          if (app?.neonProjectId) {
-            await restartApp();
+          // NOTE: Checkout "main" branch causes 500 error if branch doesn't exist
+          // await checkoutVersion({ appId, versionId: "main" });
+          
+          // Checkout the latest version (first in the list, most recent commit)
+          const latestVersion = liveVersions[0];
+          if (latestVersion && latestVersion.oid) {
+            await checkoutVersion({ appId, versionId: latestVersion.oid });
+            // Refresh app to reload files for the latest version
+            await refreshApp();
+            if (app?.neonProjectId) {
+              await restartApp();
+            }
           }
         }
       }
-
+ 
       wasVisibleRef.current = isVisible;
     }
     updatePaneState();
@@ -72,23 +79,23 @@ export function VersionPane({ isVisible, onClose }: VersionPaneProps) {
     setSelectedVersionId,
     appId,
     checkoutVersion,
-    // refreshVersions,
-    // liveVersions,
+    refreshVersions,
+    liveVersions,
   ]);
-
+ 
   // Initial load of cached versions when live versions become available
   useEffect(() => {
-    // if (isVisible && liveVersions.length > 0 && cachedVersions.length === 0) {
-    //   setCachedVersions(liveVersions);
-    // }
-  }, [isVisible, cachedVersions.length]);
-
+    if (isVisible && liveVersions.length > 0 && cachedVersions.length === 0) {
+      setCachedVersions(liveVersions);
+    }
+  }, [isVisible, cachedVersions.length, liveVersions]);
+ 
   if (!isVisible) {
     return null;
   }
-
+ 
   const handleVersionClick = async (version: Version) => {
-    if (appId) {
+    if (appId && version.oid) {
       setSelectedVersionId(version.oid);
       try {
         await checkoutVersion({ appId, versionId: version.oid });
@@ -102,10 +109,10 @@ export function VersionPane({ isVisible, onClose }: VersionPaneProps) {
       }
     }
   };
-
+ 
   // const versions = cachedVersions.length > 0 ? cachedVersions : liveVersions;
-  const versions = cachedVersions;
-
+  const versions = cachedVersions.length > 0 ? cachedVersions : liveVersions;
+ 
   return (
     <div className="h-full border-t border-2 border-border w-full">
       <div className="p-2 border-b border-border flex items-center justify-between">
@@ -127,7 +134,7 @@ export function VersionPane({ isVisible, onClose }: VersionPaneProps) {
           <div className="divide-y divide-border">
             {versions.map((version: Version, index: number) => (
               <div
-                key={version.oid}
+                key={version.oid || version.hash || version.id || `version-${index}`}
                 className={cn(
                   "px-4 py-2 hover:bg-(--background-lightest) cursor-pointer",
                   selectedVersionId === version.oid &&
@@ -146,7 +153,7 @@ export function VersionPane({ isVisible, onClose }: VersionPaneProps) {
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-xs">
                       Version {versions.length - index} (
-                      {version.oid.slice(0, 7)})
+                      {(version.oid || version.hash || version.id || 'unknown').slice(0, 7)})
                     </span>
                     {/* example format: '2025-07-25T21:52:01Z' */}
                     {version.dbTimestamp &&
@@ -221,18 +228,20 @@ export function VersionPane({ isVisible, onClose }: VersionPaneProps) {
                         : version.message}
                     </p>
                   )}
-
+ 
                   <div className="flex items-center gap-1">
-                    {/* Restore button */}
-                    <Tooltip>
+                    {/* NOTE: currently Restore button functionality is not implemented */}
+                    {/* <Tooltip>
                       <TooltipTrigger asChild>
                         <button
                           onClick={async (e) => {
                             e.stopPropagation();
-
-                            // await revertVersion({
-                            //   versionId: version.oid,
-                            // });
+ 
+                            if (version.oid) {
+                              await revertVersion({
+                                versionId: version.oid,
+                              });
+                            }
                             setSelectedVersionId(null);
                             // Close the pane after revert to force a refresh on next open
                             onClose();
@@ -264,7 +273,7 @@ export function VersionPane({ isVisible, onClose }: VersionPaneProps) {
                           ? "Restoring to this version..."
                           : "Restore to this version"}
                       </TooltipContent>
-                    </Tooltip>
+                    </Tooltip> */}
                   </div>
                 </div>
               </div>

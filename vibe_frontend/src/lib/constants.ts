@@ -45,6 +45,12 @@ export const POLLING_STATUS_API = 5000;
 export const MAX_POLLING_STATUS_API = 3 * 60 * 1000;
 
 /**
+ * GitHub repository sync polling interval (initial retry duration in seconds)
+ * Default: 8 seconds
+ */
+export const GITHUB_SYNC_POLLING_INTERVAL = 8;
+
+/**
  * Public routes that don't require authentication
  */
 export const PUBLIC_ROUTES = ["/login", "/unauthorized"] as const;

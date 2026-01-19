@@ -14,7 +14,9 @@ export function useLoadAppFile(appId: number | null, filePath: string | null) {
       if (appId === null || filePath === null) {
         return null;
       }
-      return await filesApi.readFile(appId, filePath);
+      const result = await filesApi.readFile(appId, filePath);
+      // Ensure we always return a defined value (never undefined)
+      return result !== undefined ? result : null;
     },
     enabled: appId !== null && filePath !== null,
     retry: false,

@@ -1,7 +1,4 @@
 "use client";
-// As of now bypass publish feature - Publish button redirects directly to localhost
-// Original PublishPanel code with GitHub and Vercel connectors commented out below:
-/*
 import { useAtomValue } from "jotai";
 import { selectedAppIdAtom } from "@/atoms/appAtoms";
 import { useLoadApp } from "@/hooks/useLoadApp";
@@ -110,7 +107,8 @@ export const PublishPanel = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        {/* NOTE: currently we are not supporting Vercel features */}
+        {/* <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2">
               <button
@@ -166,39 +164,8 @@ export const PublishPanel = () => {
               <VercelConnector appId={selectedAppId} folderName={app.name} />
             )}
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
-    </div>
-  );
-};
-*/
-
-// Current implementation - Redirects to localhost URL when app is ready
-export const PublishPanel = () => {
-  return (
-    <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-      <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-        <svg
-          className="w-6 h-6 text-blue-600 dark:text-blue-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M13 10V3L4 14h7v7l9-11h-7z"
-          />
-        </svg>
-      </div>
-      <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-4">
-        Publish Feature
-      </h2>
-      <p className="text-gray-600 dark:text-gray-400 max-w-md mt-2">
-        Click the Publish button in the header to open your running application
-        in a new tab.
-      </p>
     </div>
   );
 };

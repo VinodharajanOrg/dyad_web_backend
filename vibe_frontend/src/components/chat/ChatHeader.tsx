@@ -1,10 +1,10 @@
 "use client";
-
-import { PanelRightOpen, PlusCircle } from "lucide-react";
+import { PanelRightOpen, PlusCircle, History } from "lucide-react";
 import { PanelRightClose } from "lucide-react";
 import { useAtom, useAtomValue } from "jotai";
-import { selectedAppIdAtom } from "@/atoms/appAtoms";
+import { selectedAppIdAtom, selectedVersionIdAtom } from "@/atoms/appAtoms";
 import { Button } from "../ui/button";
+import { useVersions } from "@/hooks/useVersions";
 // import {
 // } from "../ui/tooltip";
 import { useRouter } from "next/navigation";
@@ -15,14 +15,14 @@ import { showError /*, showSuccess */ } from "@/lib/toast";
 // import { useRenameBranch } from "@/hooks/useRenameBranch";
 import { isAnyCheckoutVersionInProgressAtom } from "@/atoms/appAtoms";
 import { LoadingBar } from "../ui/LoadingBar";
-
+ 
 interface ChatHeaderProps {
   isVersionPaneOpen?: boolean;
   isPreviewOpen: boolean;
   onTogglePreview: () => void;
   onVersionClick?: () => void;
 }
-
+ 
 export function ChatHeader({
   isVersionPaneOpen,
   isPreviewOpen,
@@ -30,8 +30,8 @@ export function ChatHeader({
   onVersionClick,
 }: ChatHeaderProps) {
   const appId = useAtomValue(selectedAppIdAtom);
-  // NOTE: As of networkInterfaces, we are not using versions in the UI
-  // const { versions, loading: versionsLoading } = useVersions(appId);
+  const { versions, loading: versionsLoading } = useVersions(appId);
+  const selectedVersionId = useAtomValue(selectedVersionIdAtom);
   const router = useRouter();
   const [/*selectedChatId*/, setSelectedChatId] = useAtom(selectedChatIdAtom);
   const { refetch: refreshChats } = useChats(appId ?? undefined);
@@ -39,17 +39,17 @@ export function ChatHeader({
   const isAnyCheckoutVersionInProgress = useAtomValue(
     isAnyCheckoutVersionInProgressAtom,
   );
-
+ 
   // NOTE: as of now, we are not using branches in the UI
   // const {
   //   branchInfo,
   //   isLoading: branchInfoLoading,
   //   refetchBranchInfo,
   // } = useCurrentBranch(appId);
-
+ 
   // const { checkoutVersion, isCheckingOutVersion} = useCheckoutVersion();
   // const { renameBranch, isRenamingBranch } = useRenameBranch();
-
+ 
   // const { checkoutVersion } = useCheckoutVersion();
   // const { renameBranch } = useRenameBranch();
   // useEffect(() => {
@@ -57,17 +57,17 @@ export function ChatHeader({
   //     refetchBranchInfo();
   //   }
   // }, [appId, selectedChatId, isStreaming, refetchBranchInfo]);
-
+ 
   // const handleCheckoutMainBranch = async () => {
   //   if (!appId) return;
   //   await checkoutVersion({ appId, versionId: "main" });
   // };
-
+ 
   // const handleRenameMasterToMain = async () => {
   //   if (!appId) return;
   //   // If this throws, it will automatically show an error toast
   //   await renameBranch({ oldBranchName: "master", newBranchName: "main" });
-
+ 
   //   showSuccess("Master branch renamed to main");
   // };
   const handleNewChat = async () => {
@@ -84,14 +84,22 @@ export function ChatHeader({
       router.push("/");
     }
   };
-
+ 
   // REMINDER: KEEP UP TO DATE WITH app_handlers.ts
-  // const versionPostfix = versions.length === 100_000 ? `+` : "";
-
+  const versionPostfix = versions.length === 100_000 ? `+` : "";
+ 
+  // Calculate which version number is currently selected
+  const selectedVersionIndex = selectedVersionId
+    ? versions.findIndex((v) => v.oid === selectedVersionId || v.hash === selectedVersionId || v.id === selectedVersionId)
+    : -1;
+  const displayVersionNumber = selectedVersionIndex >= 0
+    ? versions.length - selectedVersionIndex
+    : versions.length;
+ 
   // const isNotMainBranch = branchInfo && branchInfo.branch !== "main";
-
+ 
   // const currentBranchName = branchInfo?.branch;
-
+ 
   return (
     <div className="flex flex-col w-full @container">
       <LoadingBar isVisible={isAnyCheckoutVersionInProgress} />
@@ -164,7 +172,7 @@ export function ChatHeader({
           )}
         </div>
       )} */}
-
+ 
       {/* Why is this pt-0.5? Because the loading bar is h-1 (it always takes space) and we want the vertical spacing to be consistent.*/}
       <div className="@container flex items-center justify-between pb-1.5 pt-0.5">
         <div className="flex items-center space-x-2">
@@ -176,7 +184,7 @@ export function ChatHeader({
             <PlusCircle size={16} />
             <span>New Chat</span>
           </Button>
-          {/* <Button
+          <Button
             onClick={onVersionClick}
             variant="ghost"
             className="hidden @6xs:flex cursor-pointer items-center gap-1 text-sm px-2 py-1 rounded-md"
@@ -184,10 +192,10 @@ export function ChatHeader({
             <History size={16} />
             {versionsLoading
               ? "..."
-              : `Version ${versions.length}${versionPostfix}`}
-          </Button> */}
+              : `Version ${displayVersionNumber}${versionPostfix}`}
+          </Button>
         </div>
-
+ 
         <button
           data-testid="toggle-preview-panel-button"
           onClick={onTogglePreview}

@@ -3,16 +3,16 @@ import { gitApi } from "@/api/endpoints/git";
 import { IpcClient } from "@/api/ipc_client";
 import { useSetAtom } from "jotai";
 import { activeCheckoutCounterAtom } from "@/atoms/appAtoms";
-
+ 
 interface CheckoutVersionVariables {
   appId: number;
   versionId: string;
 }
-
+ 
 export function useCheckoutVersion() {
   const queryClient = useQueryClient();
   const setActiveCheckouts = useSetAtom(activeCheckoutCounterAtom);
-
+ 
   const { isPending: isCheckingOutVersion, mutateAsync: checkoutVersion } =
     useMutation<void, Error, CheckoutVersionVariables>({
       mutationFn: async ({ appId, versionId }) => {
@@ -51,7 +51,7 @@ export function useCheckoutVersion() {
       },
       meta: { showErrorToast: true },
     });
-
+ 
   return {
     checkoutVersion,
     isCheckingOutVersion,

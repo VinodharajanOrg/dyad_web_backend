@@ -1,18 +1,21 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   Github,
   Clipboard,
   Check,
-  AlertTriangle,
   ChevronRight,
 } from "lucide-react";
+import { ForcePushDialog } from "@/components/github/ForcePushDialog";
+import { ForcePushButton } from "@/components/github/ForcePushButton";
 import { IpcClient } from "@/api/ipc_client";
+import { gitApi } from "@/api/endpoints/git";
 import { useSettings } from "@/hooks/useSettings";
 import { useLoadApp } from "@/hooks/useLoadApp";
 import { openExternalUrl } from "@/utils/openExternalUrl";
-import { COPY_FEEDBACK_DURATION } from "@/lib/constants";
+import { COPY_FEEDBACK_DURATION, GITHUB_SYNC_POLLING_INTERVAL } from "@/lib/constants";
 import {
   Select,
   SelectContent,
@@ -20,14 +23,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -41,11 +36,14 @@ interface GitHubRepo {
   name: string;
   full_name: string;
   private: boolean;
+  org?: string;
+  defaultBranch?: string;
+  branches?: GitHubBranch[];
 }
 
 interface GitHubBranch {
   name: string;
-  commit: { sha: string };
+  commit?: { sha: string };
 }
 
 interface ConnectedGitHubConnectorProps {
@@ -62,6 +60,7 @@ export interface UnconnectedGitHubConnectorProps {
   settings: any;
   refreshSettings: () => void;
   handleRepoSetupComplete: () => void;
+  refreshApp: () => void;
   expanded?: boolean;
 }
 
@@ -78,18 +77,82 @@ function ConnectedGitHubConnector({
   const [showForceDialog, setShowForceDialog] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [connectionCheckError, setConnectionCheckError] = useState<string | null>(null);
   const autoSyncTriggeredRef = useRef(false);
+  const queryClient = useQueryClient();
 
   const handleDisconnectRepo = async () => {
     setIsDisconnecting(true);
     setDisconnectError(null);
     try {
-      await (IpcClient.getInstance() as any).disconnectGithubRepo(appId);
-      refreshApp();
+      await gitApi.disconnectGitHub();
+      
+      // After successful disconnect, update the cached app data for ALL apps to remove GitHub config
+      // This is because GitHub authentication is global - disconnecting affects all apps
+      queryClient.setQueriesData(
+        { queryKey: ["app"] },
+        (oldData: any) => {
+          if (oldData) {
+            return {
+              ...oldData,
+              githubOrg: null,
+              githubRepo: null,
+              githubBranch: null,
+            };
+          }
+          return oldData;
+        }
+      );
     } catch (err: any) {
       setDisconnectError(err.message || "Failed to disconnect repository.");
     } finally {
       setIsDisconnecting(false);
+    }
+  };
+
+  const verifyAndSync = async (force: boolean = false) => {
+    setIsVerifying(true);
+    setConnectionCheckError(null);
+    setSyncError(null);
+    setSyncSuccess(false);
+    setShowForceDialog(false);
+
+    try {
+      // Step 1: Check if GitHub is authenticated
+      const isConnected = await gitApi.checkConnectionStatus();
+
+      if (!isConnected) {
+        // If not authenticated, show "Connect to GitHub" option
+        setConnectionCheckError(
+          "Not authenticated with GitHub. Please connect your GitHub account first."
+        );
+        setIsVerifying(false);
+        // Trigger app refresh to show UnconnectedGitHubConnector
+        await refreshApp();
+        return;
+      }
+
+      // Step 2: Check if repo is configured
+      if (!app.githubOrg || !app.githubRepo) {
+        // If repo not configured, show "Create Repo" or "Connect to existing Repo" options
+        setConnectionCheckError(
+          "GitHub is connected but repository is not configured. Please set up a repository."
+        );
+        setIsVerifying(false);
+        // Trigger app refresh which will show UnconnectedGitHubConnector with repo setup options
+        await refreshApp();
+        return;
+      }
+
+      // Step 3: If both checks pass, proceed with sync
+      setIsVerifying(false);
+      await handleSyncToGithub(force);
+    } catch (err: any) {
+      setConnectionCheckError(
+        err.message || "Failed to verify connection status."
+      );
+      setIsVerifying(false);
     }
   };
 
@@ -101,29 +164,28 @@ function ConnectedGitHubConnector({
       setShowForceDialog(false);
 
       try {
-        const result = await (IpcClient.getInstance() as any).syncGithubRepo(
+        await gitApi.syncGitHubRepo(
           appId,
+          app.githubOrg,
+          app.githubRepo,
+          app.githubBranch || "main",
           force,
         );
-        if (result.success) {
-          setSyncSuccess(true);
-        } else {
-          setSyncError(result.error || "Failed to sync to GitHub.");
-          // If it's a push rejection error, show the force dialog
-          if (
-            result.error?.includes("rejected") ||
-            result.error?.includes("non-fast-forward")
-          ) {
-            // Don't show force dialog immediately, let user see the error first
-          }
-        }
+        setSyncSuccess(true);
       } catch (err: any) {
         setSyncError(err.message || "Failed to sync to GitHub.");
+        // If it's a push rejection error, show the force dialog
+        if (
+          err.message?.includes("rejected") ||
+          err.message?.includes("non-fast-forward")
+        ) {
+          // Don't show force dialog immediately, let user see the error first
+        }
       } finally {
         setIsSyncing(false);
       }
     },
-    [appId],
+    [appId, app.githubOrg, app.githubRepo, app.githubBranch],
   );
 
   // Auto-sync when triggerAutoSync prop is true
@@ -161,8 +223,8 @@ function ConnectedGitHubConnector({
         </p>
       )}
       <div className="mt-2 flex gap-2">
-        <Button onClick={() => handleSyncToGithub(false)} disabled={isSyncing}>
-          {isSyncing ? (
+        <Button onClick={() => verifyAndSync(false)} disabled={isSyncing || isVerifying}>
+          {isSyncing || isVerifying ? (
             <>
               <svg
                 className="animate-spin h-5 w-5 mr-2 inline"
@@ -185,7 +247,7 @@ function ConnectedGitHubConnector({
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 ></path>
               </svg>
-              Syncing...
+              {isVerifying ? "Verifying..." : "Syncing..."}
             </>
           ) : (
             "Sync to GitHub"
@@ -199,6 +261,9 @@ function ConnectedGitHubConnector({
           {isDisconnecting ? "Disconnecting..." : "Disconnect from repo"}
         </Button>
       </div>
+      {connectionCheckError && (
+        <p className="text-red-600 mt-2">{connectionCheckError}</p>
+      )}
       {syncError && (
         <div className="mt-2">
           <p className="text-red-600">
@@ -219,15 +284,7 @@ function ConnectedGitHubConnector({
           </p>
           {(syncError.includes("rejected") ||
             syncError.includes("non-fast-forward")) && (
-            <Button
-              onClick={() => setShowForceDialog(true)}
-              variant="outline"
-              size="sm"
-              className="mt-2 text-orange-600 border-orange-600 hover:bg-orange-50"
-            >
-              <AlertTriangle className="h-4 w-4 mr-2" />
-              Force Push (Dangerous)
-            </Button>
+            <ForcePushButton onClick={() => setShowForceDialog(true)} />
           )}
         </div>
       )}
@@ -239,53 +296,12 @@ function ConnectedGitHubConnector({
       )}
 
       {/* Force Push Warning Dialog */}
-      <Dialog open={showForceDialog} onOpenChange={setShowForceDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-orange-500" />
-              Force Push Warning
-            </DialogTitle>
-            <DialogDescription>
-              <div className="space-y-3">
-                <p>
-                  You are about to perform a <strong>force push</strong> to your
-                  GitHub repository.
-                </p>
-                <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-md border border-orange-200 dark:border-orange-800">
-                  <p className="text-sm text-orange-800 dark:text-orange-200">
-                    <strong>
-                      This is dangerous and non-reversible and will:
-                    </strong>
-                  </p>
-                  <ul className="text-sm text-orange-700 dark:text-orange-300 list-disc list-inside mt-2 space-y-1">
-                    <li>Overwrite the remote repository history</li>
-                    <li>
-                      Permanently delete commits that exist on the remote but
-                      not locally
-                    </li>
-                  </ul>
-                </div>
-                <p className="text-sm">
-                  Only proceed if you're certain this is what you want to do.
-                </p>
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForceDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => handleSyncToGithub(true)}
-              disabled={isSyncing}
-            >
-              {isSyncing ? "Force Pushing..." : "Force Push"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ForcePushDialog
+        open={showForceDialog}
+        onOpenChange={setShowForceDialog}
+        onConfirm={() => handleSyncToGithub(true)}
+        isProcessing={isSyncing}
+      />
     </div>
   );
 }
@@ -296,22 +312,31 @@ export function UnconnectedGitHubConnector({
   settings,
   refreshSettings,
   handleRepoSetupComplete,
+  refreshApp,
   expanded,
 }: UnconnectedGitHubConnectorProps) {
   // --- Collapsible State ---
   const [isExpanded, setIsExpanded] = useState(expanded || false);
+
+  // --- GitHub Connection Status State ---
+  const [isCheckingConnection, setIsCheckingConnection] = useState(true);
+  const [isGitHubConnected, setIsGitHubConnected] = useState(false);
+  const [connectionCheckError, setConnectionCheckError] = useState<string | null>(null);
 
   // --- GitHub Device Flow State ---
   const [githubUserCode, setGithubUserCode] = useState<string | null>(null);
   const [githubVerificationUri, setGithubVerificationUri] = useState<
     string | null
   >(null);
+  const [githubDeviceCode, setGithubDeviceCode] = useState<string | null>(null);
   const [githubError, setGithubError] = useState<string | null>(null);
   const [isConnectingToGithub, setIsConnectingToGithub] = useState(false);
   const [githubStatusMessage, setGithubStatusMessage] = useState<string | null>(
     null,
   );
   const [codeCopied, setCodeCopied] = useState(false);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalDurationRef = useRef<number>(GITHUB_SYNC_POLLING_INTERVAL); // Start with 8 seconds
 
   // --- Repo Setup State ---
   const [repoSetupMode, setRepoSetupMode] = useState<"create" | "existing">(
@@ -338,28 +363,176 @@ export function UnconnectedGitHubConnector({
   const [isCreatingRepo, setIsCreatingRepo] = useState(false);
   const [createRepoError, setCreateRepoError] = useState<string | null>(null);
   const [createRepoSuccess, setCreateRepoSuccess] = useState<boolean>(false);
+  const [showForceDialog, setShowForceDialog] = useState(false);
+
+  // GitHub suggestion state
+  const [isFetchingSuggestion, setIsFetchingSuggestion] = useState(false);
+  const [isAuthorizationComplete, setIsAuthorizationComplete] = useState(false);
 
   // Assume org is the authenticated user for now (could add org input later)
   const githubOrg = ""; // Use empty string for now (GitHub API will default to the authenticated user)
 
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Check GitHub connection status on component mount
+  useEffect(() => {
+    const checkGitHubConnection = async () => {
+      setIsCheckingConnection(true);
+      setConnectionCheckError(null);
+      try {
+        const connected = await gitApi.checkConnectionStatus();
+        setIsGitHubConnected(connected);
+        if (connected) {
+          // If already connected, expand the repo setup section
+          setIsExpanded(true);
+          setIsAuthorizationComplete(true);
+        }
+      } catch (err: any) {
+        setConnectionCheckError(err.message || "Failed to check GitHub connection");
+        setIsGitHubConnected(false);
+      } finally {
+        setIsCheckingConnection(false);
+      }
+    };
+
+    checkGitHubConnection();
+  }, []);
+
   const handleConnectToGithub = async () => {
-    // Check if IPC client is available (null in web mode)
     const ipcClient = IpcClient.getInstance();
-    if (!ipcClient) {
-      setGithubError("GitHub integration not available in web mode");
-      return;
-    }
 
     setIsConnectingToGithub(true);
     setGithubError(null);
     setGithubUserCode(null);
     setGithubVerificationUri(null);
+    setGithubDeviceCode(null);
     setGithubStatusMessage("Requesting device code from GitHub...");
 
-    // Send IPC message to main process to start the flow
-    (ipcClient as any).startGithubDeviceFlow(appId);
+    try {
+      if (ipcClient) {
+        // Electron mode: use IPC
+        (ipcClient as any).startGithubDeviceFlow(appId);
+      } else {
+        // Web mode: use API endpoint
+        const response = await gitApi.startGitHubDeviceFlow();
+        setGithubUserCode(response.userCode);
+        setGithubVerificationUri(response.verificationUri);
+        setGithubDeviceCode(response.deviceCode);
+        setGithubStatusMessage("GitHub device code requested. Please authorize.");
+        setIsConnectingToGithub(false);
+
+        // Set polling interval from response (default 8 seconds)
+        pollingIntervalDurationRef.current = GITHUB_SYNC_POLLING_INTERVAL;
+
+        // Start polling for device flow approval
+        startDeviceFlowPolling(response.deviceCode);
+      }
+    } catch (err: any) {
+      setGithubError(err.message || "Failed to start GitHub device flow");
+      setIsConnectingToGithub(false);
+    }
+  };
+
+  const startDeviceFlowPolling = (deviceCode: string) => {
+    // Clear any existing polling interval
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
+    // Define the polling function
+    const pollStatus = async () => {
+      try {
+        const status = await gitApi.getGitHubDeviceFlowStatus(deviceCode);
+
+        if (status.status === "approved") {
+          // User approved! Set authorization flag and fetch suggestion
+          setGithubUserCode(null);
+          setGithubVerificationUri(null);
+          setGithubError(null);
+          setGithubStatusMessage(null);
+          setIsAuthorizationComplete(true); // Mark authorization as complete
+
+          // Stop polling
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+
+          // Refresh settings to fetch the new GitHub token
+          await refreshSettings();
+
+          // Fetch GitHub suggestion for repo setup
+          if (appId) {
+            setIsFetchingSuggestion(true);
+            try {
+              const suggestion = await gitApi.getGitHubSuggestion(appId);
+              // Pre-populate repo setup with suggestion
+              setRepoName(suggestion.repo);
+              setSelectedBranch(suggestion.branch);
+              setRepoSetupMode("create"); // Default to create mode with suggested name
+              setIsExpanded(true); // Auto-expand repo setup section
+            } catch (err: any) {
+              console.error("Failed to fetch GitHub suggestion:", err);
+              // Still expand setup section even if suggestion fails
+              setIsExpanded(true);
+            } finally {
+              setIsFetchingSuggestion(false);
+            }
+          } else {
+            setIsExpanded(true);
+          }
+        } else if (status.status === "denied") {
+          // User explicitly denied access
+          setGithubError("GitHub access was denied. Please try again.");
+          setGithubUserCode(null);
+          setGithubVerificationUri(null);
+
+          // Stop polling
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+        } else if (status.status === "expired") {
+          // Device code expired
+          setGithubError("Device code expired. Please start over.");
+          setGithubUserCode(null);
+          setGithubVerificationUri(null);
+
+          // Stop polling
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+        }
+        // For "pending", continue polling with current interval
+      } catch (err: any) {
+        console.error("Error polling device flow status:", err);
+
+        // Check if error is "slow_down" - if so, increase interval
+        if (
+          err.response?.data?.error?.error === "slow_down" ||
+          err.response?.data?.error === "slow_down"
+        ) {
+          const newInterval = err.response?.data?.error?.interval || 
+                             err.response?.data?.interval || 
+                             pollingIntervalDurationRef.current * 2;
+          console.log(
+            `GitHub requested slower polling. New interval: ${newInterval}s`
+          );
+          pollingIntervalDurationRef.current = newInterval;
+        }
+        // Continue polling even on error
+      }
+    };
+
+    // Initial poll
+    pollStatus();
+
+    // Set up recurring polls with the configured interval
+    pollingIntervalRef.current = setInterval(
+      pollStatus,
+      pollingIntervalDurationRef.current * 1000
+    );
   };
 
   useEffect(() => {
@@ -375,7 +548,6 @@ export function UnconnectedGitHubConnector({
     // Listener for updates (user code, verification uri, status messages)
     const removeUpdateListener = (ipcClient as any).onGithubDeviceFlowUpdate(
       (data: any) => {
-        console.log("Received github:flow-update", data);
         if (data.userCode) {
           setGithubUserCode(data.userCode);
         }
@@ -401,7 +573,6 @@ export function UnconnectedGitHubConnector({
     // Listener for success
     const removeSuccessListener = (ipcClient as any).onGithubDeviceFlowSuccess(
       (data: any) => {
-        console.log("Received github:flow-success", data);
         setGithubStatusMessage("Successfully connected to GitHub!");
         setGithubUserCode(null); // Clear user-facing info
         setGithubVerificationUri(null);
@@ -416,7 +587,6 @@ export function UnconnectedGitHubConnector({
     // Listener for errors
     const removeErrorListener = (ipcClient as any).onGithubDeviceFlowError(
       (data: any) => {
-        console.log("Received github:flow-error", data);
         setGithubError(data.error || "An unknown error occurred.");
         setGithubStatusMessage(null);
         setGithubUserCode(null);
@@ -438,18 +608,36 @@ export function UnconnectedGitHubConnector({
     };
   }, []); // Re-run effect if appId changes
 
-  // Load available repos when GitHub is connected
+  // Cleanup polling interval on unmount
   useEffect(() => {
-    if (settings?.githubAccessToken && repoSetupMode === "existing") {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Load available repos when authorization is complete
+  useEffect(() => {
+    if (isAuthorizationComplete) {
       loadAvailableRepos();
     }
-  }, [settings?.githubAccessToken, repoSetupMode]);
+  }, [isAuthorizationComplete]);
 
   const loadAvailableRepos = async () => {
     setIsLoadingRepos(true);
     try {
-      const repos = await (IpcClient.getInstance() as any).listGithubRepos();
-      setAvailableRepos(repos);
+      const repos = await gitApi.listGitHubRepos();
+      // Transform API response to match GitHubRepo interface
+      const transformedRepos: GitHubRepo[] = (repos || []).map((repo) => ({
+        name: repo.repo,
+        full_name: `${repo.org}/${repo.repo}`,
+        private: repo.visibility === "private",
+        org: repo.org,
+        defaultBranch: repo.defaultBranch,
+        branches: repo.branches || [],
+      }));
+      setAvailableRepos(transformedRepos);
     } catch (error) {
       console.error("Failed to load GitHub repos:", error);
     } finally {
@@ -471,18 +659,22 @@ export function UnconnectedGitHubConnector({
     setBranchInputMode("select"); // Reset to select mode when loading new repo
     setCustomBranchName(""); // Clear custom branch name
     try {
-      const [owner, repo] = selectedRepo.split("/");
-      const branches = await (
-        IpcClient.getInstance() as any
-      ).getGithubRepoBranches(owner, repo);
+      // Find the selected repo in availableRepos and extract its branches
+      const repo = availableRepos.find((r) => r.full_name === selectedRepo);
+      const branches = repo?.branches || [];
+      
       setAvailableBranches(branches);
-      // Default to main if available, otherwise first branch
+      
+      // Default to default branch, then main, then master, then first branch
       const defaultBranch =
-        branches.find((b: any) => b.name === "main" || b.name === "master") ||
-        branches[0];
-      if (defaultBranch) {
-        setSelectedBranch(defaultBranch.name);
-      }
+        repo?.defaultBranch ||
+        branches.find(
+          (b: any) => b.name === "main" || b.name === "master",
+        )?.name ||
+        branches[0]?.name ||
+        "main";
+      
+      setSelectedBranch(defaultBranch);
     } catch (error) {
       console.error("Failed to load repo branches:", error);
     } finally {
@@ -527,48 +719,76 @@ export function UnconnectedGitHubConnector({
     [checkRepoAvailability],
   );
 
-  const handleSetupRepo = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSetupRepo = async (e?: React.FormEvent, force: boolean = false) => {
+    e?.preventDefault();
     if (!appId) return;
 
     setCreateRepoError(null);
     setIsCreatingRepo(true);
     setCreateRepoSuccess(false);
+    setShowForceDialog(false);
 
     try {
       if (repoSetupMode === "create") {
-        await (IpcClient.getInstance() as any).createGithubRepo(
-          githubOrg,
-          repoName,
-          appId,
-          selectedBranch,
-        );
+        // Create repo and immediately sync using response data
+        const repoData = await gitApi.createGitHubRepo(appId, repoName, selectedBranch);
+        // Sync immediately with the response data (org, repo, branch)
+        await gitApi.syncGitHubRepo(appId, repoData.org, repoData.repo, repoData.branch, force);
       } else {
-        const [owner, repo] = selectedRepo.split("/");
+        const repo = availableRepos.find((r) => r.full_name === selectedRepo);
+        if (!repo || !repo.org) {
+          throw new Error("Invalid repository selection");
+        }
         const branchToUse =
           branchInputMode === "custom" ? customBranchName : selectedBranch;
-        await (IpcClient.getInstance() as any).connectToExistingGithubRepo(
-          owner,
-          repo,
-          branchToUse,
-          appId,
-        );
+        await gitApi.syncGitHubRepo(appId, repo.org, repo.name, branchToUse, force);
       }
 
       setCreateRepoSuccess(true);
       setRepoCheckError(null);
+      // Immediately refetch app data to show connected repo UI
+      await refreshApp();
       handleRepoSetupComplete();
     } catch (err: any) {
       setCreateRepoError(
         err.message ||
-          `Failed to ${repoSetupMode === "create" ? "create" : "connect to"} repository.`,
+          `Failed to ${force ? "force sync" : repoSetupMode === "create" ? "create" : "connect to"} repository.`,
       );
+
     } finally {
       setIsCreatingRepo(false);
     }
   };
 
-  if (!settings?.githubAccessToken) {
+  if (isCheckingConnection) {
+    return (
+      <div className="mt-1 w-full flex items-center justify-center p-4" data-testid="github-checking-connection">
+        <svg
+          className="animate-spin h-5 w-5 mr-2"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+          ></circle>
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          ></path>
+        </svg>
+        <span>Checking GitHub connection...</span>
+      </div>
+    );
+  }
+
+  if (!settings?.githubAccessToken && !isAuthorizationComplete && !isGitHubConnected) {
     return (
       <div className="mt-1 w-full" data-testid="github-unconnected-repo">
         <Button
@@ -576,7 +796,7 @@ export function UnconnectedGitHubConnector({
           className="cursor-pointer w-full py-5 flex justify-center items-center gap-2"
           size="lg"
           variant="outline"
-          disabled={isConnectingToGithub} // Also disable if appId is null
+          disabled={isConnectingToGithub}
         >
           Connect to GitHub
           <Github className="h-5 w-5" />
@@ -900,7 +1120,13 @@ export function UnconnectedGitHubConnector({
           </form>
 
           {createRepoError && (
-            <p className="text-red-600 mt-2">{createRepoError}</p>
+            <div className="mt-2">
+              <p className="text-red-600">{createRepoError}</p>
+              {(createRepoError.includes("rejected") ||
+                createRepoError.includes("non-fast-forward")) && (
+                <ForcePushButton onClick={() => setShowForceDialog(true)} />
+              )}
+            </div>
           )}
           {createRepoSuccess && (
             <p className="text-green-600 mt-2">
@@ -911,7 +1137,14 @@ export function UnconnectedGitHubConnector({
           )}
         </div>
       </div>
-    </div>
+
+      {/* Force Push Warning Dialog */}
+      <ForcePushDialog
+        open={showForceDialog}
+        onOpenChange={setShowForceDialog}
+        onConfirm={() => handleSetupRepo(undefined, true)}
+        isProcessing={isCreatingRepo}
+      /></div>
   );
 }
 
@@ -920,21 +1153,13 @@ export function GitHubConnector({
   folderName,
   expanded,
 }: GitHubConnectorProps) {
-  // Check if IPC client is available (null in web mode)
-  const ipcClient = IpcClient.getInstance();
-  if (!ipcClient) {
-    // GitHub integration not available in web mode
-    return null;
-  }
-
   const { app, refreshApp } = useLoadApp(appId);
   const { settings, refreshSettings } = useSettings();
   const [pendingAutoSync, setPendingAutoSync] = useState(false);
 
   const handleRepoSetupComplete = useCallback(() => {
     setPendingAutoSync(true);
-    refreshApp();
-  }, [refreshApp]);
+  }, []);
 
   const handleAutoSyncComplete = useCallback(() => {
     setPendingAutoSync(false);
@@ -958,6 +1183,7 @@ export function GitHubConnector({
         settings={settings}
         refreshSettings={refreshSettings}
         handleRepoSetupComplete={handleRepoSetupComplete}
+        refreshApp={refreshApp}
         expanded={expanded}
       />
     );

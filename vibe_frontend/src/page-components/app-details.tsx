@@ -2,10 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAtom, useSetAtom } from "jotai";
-import {
-  appsListAtom,
-  selectedAppIdAtom,
-} from "@/atoms/appAtoms";
+import { appsListAtom, selectedAppIdAtom } from "@/atoms/appAtoms";
 import { useLoadApps } from "@/hooks/useLoadApps";
 import { useUpdateApp, useDeleteApp, useCopyApp } from "@/hooks/useApps";
 import { useCreateChat } from "@/hooks/useChats";
@@ -40,6 +37,7 @@ import { invalidateAppQuery } from "@/hooks/useLoadApp";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useCheckName } from "@/hooks/useCheckName";
 import { SEARCH_DEBOUNCE_DELAY } from "@/lib/constants";
+import { GitHubConnector } from "@/components/GitHubConnector";
 
 export default function AppDetailsPage() {
   const router = useRouter();
@@ -57,7 +55,7 @@ export default function AppDetailsPage() {
     useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [isRenamingFolder, setIsRenamingFolder] = useState(false);
-  
+
   const [isCopyDialogOpen, setIsCopyDialogOpen] = useState(false);
   const [newCopyAppName, setNewCopyAppName] = useState("");
   const queryClient = useQueryClient();
@@ -69,10 +67,10 @@ export default function AppDetailsPage() {
 
   const debouncedNewCopyAppName = useDebounce(
     newCopyAppName,
-    SEARCH_DEBOUNCE_DELAY,
+    SEARCH_DEBOUNCE_DELAY
   );
   const { data: checkNameResult, isLoading: isCheckingName } = useCheckName(
-    debouncedNewCopyAppName,
+    debouncedNewCopyAppName
   );
   const nameExists = checkNameResult?.exists ?? false;
 
@@ -145,7 +143,7 @@ export default function AppDetailsPage() {
       alert(
         `Error renaming app: ${
           error instanceof Error ? error.message : String(error)
-        }`,
+        }`
       );
     } finally {
       setIsRenaming(false);
@@ -175,7 +173,7 @@ export default function AppDetailsPage() {
       alert(
         `Error renaming folder: ${
           error instanceof Error ? error.message : String(error)
-        }`,
+        }`
       );
     } finally {
       setIsRenamingFolder(false);
@@ -374,10 +372,10 @@ export default function AppDetailsPage() {
             Open in Chat
             <MessageCircle className="h-4 w-4" />
           </Button>
-          {/* NOTE: hide this features as of now
           <div className="border border-gray-200 rounded-md p-4">
             <GitHubConnector appId={appId} folderName={selectedApp.path} />
           </div>
+          {/* NOTE: hide this features as of now
           {appId && <SupabaseConnector appId={appId} />}
           {appId && <CapacitorControls appId={appId} />}
           <AppUpgrades appId={appId} /> */}

@@ -33,11 +33,12 @@ import { useCheckProblems } from "./useCheckProblems";
 import { useSettings } from "./useSettings";
 import { useLanguageModelsByProviders } from "./useLanguageModelsByProviders";
 import { useLanguageModelProviders } from "./useLanguageModelProviders";
-
+import { useVersions } from "./useVersions";
+ 
 export function getRandomNumberId() {
   return Math.floor(Math.random() * 1_000_000_000_000_000);
 }
-
+ 
 export function useStreamChat({
   hasChatId = true,
 }: { hasChatId?: boolean } = {}) {
@@ -51,9 +52,9 @@ export function useStreamChat({
   const { refetch: refreshChats } = useChats(selectedAppId ?? undefined);
   const { refreshApp } = useLoadApp(selectedAppId);
   const setPreviewPanelKey = useSetAtom(previewPanelKeyAtom);
-
+ 
   const setStreamCountById = useSetAtom(chatStreamCountByIdAtom);
-  // const { refreshVersions } = useVersions(selectedAppId);
+  const { refreshVersions } = useVersions(selectedAppId);
   const { refreshAppIframe } = useRunApp();
   const { countTokens } = useCountTokens();
   const { refetchUserBudget } = useUserBudgetInfo();
@@ -65,32 +66,32 @@ export function useStreamChat({
   const posthog = usePostHog();
   const queryClient = useQueryClient();
   // const { syncToDocker } = useDockerSync();
-
+ 
   // Get the UI state atoms for selected chat mode and model
   const selectedChatMode = useAtomValue(selectedChatModeAtom);
   const selectedModel = useAtomValue(selectedModelAtom);
   const setSelectedChatMode = useSetAtom(selectedChatModeAtom);
   const setSelectedModel = useSetAtom(selectedModelAtom);
-
+ 
   // Initialize atoms from settings on mount - simplified to just check once
   useEffect(() => {
     if (!settings) return;
-
+ 
     // Only initialize on first load (when atoms still have default values)
     if (selectedChatMode === "build" && settings.selectedChatMode) {
       setSelectedChatMode(settings.selectedChatMode as any);
     }
-
+ 
     if (!selectedModel && settings.selectedModel) {
       setSelectedModel(settings.selectedModel);
     }
   }, [settings, setSelectedChatMode, setSelectedModel]);
-
+ 
   let chatId: number | undefined;
-
+ 
   // Track abort controllers for each chat to enable cancellation
   const abortControllersRef = useRef<Map<number, AbortController>>(new Map());
-
+ 
   if (hasChatId) {
     const searchParams = useSearchParams();
     chatId = searchParams.get("id")
@@ -98,7 +99,7 @@ export function useStreamChat({
       : undefined;
   }
   let { refreshProposal } = hasChatId ? useProposal(chatId) : useProposal();
-
+ 
   const streamMessage = useCallback(
     async ({
       prompt,
@@ -121,13 +122,13 @@ export function useStreamChat({
       ) {
         return;
       }
-
+ 
       setRecentStreamChatIds((prev) => {
         const next = new Set(prev);
         next.add(chatId);
         return next;
       });
-
+ 
       setErrorById((prev) => {
         const next = new Map(prev);
         next.set(chatId, null);
@@ -138,27 +139,27 @@ export function useStreamChat({
         next.set(chatId, true);
         return next;
       });
-
+ 
       let hasIncrementedStreamCount = false;
       let abortController: AbortController | null = null;
-
+ 
       try {
         const ipcClient = IpcClient.getInstance();
-
+ 
         // Use SSE streaming in web mode
         if (!ipcClient) {
           const { chatsApi } = await import("@/api/endpoints/chats");
-
+ 
           abortController = new AbortController();
           abortControllersRef.current.set(chatId, abortController);
-
+ 
           try {
             // First, create the user message
             const userMessage = await chatsApi.createMessage(chatId, {
               role: "user",
               content: prompt,
             });
-
+ 
             // Add user message to atom directly
             setMessagesById((prev) => {
               const currentMessages = prev.get(chatId) ?? [];
@@ -172,10 +173,10 @@ export function useStreamChat({
               }
               return next;
             });
-
+ 
             // Create a temporary empty assistant message to show loading animation
             const tempAssistantMessageId = Date.now();
-
+ 
             // Add empty assistant message immediately for visual feedback (will trigger loading animation)
             setMessagesById((prev) => {
               const currentMessages = prev.get(chatId) ?? [];
@@ -196,7 +197,7 @@ export function useStreamChat({
               ]);
               return next;
             });
-
+ 
             // Increment stream count once
             if (!hasIncrementedStreamCount) {
               setStreamCountById((prev) => {
@@ -206,21 +207,21 @@ export function useStreamChat({
               });
               hasIncrementedStreamCount = true;
             }
-
+ 
             // Start streaming the assistant response
             let streamingMessageId: number | null = null;
-
+ 
             // Map chatMode: "build" -> "auto-code", others remain the same
             const chatModeMap: Record<string, string> = {
               build: "auto-code",
               ask: "ask",
             };
             const chatMode = chatModeMap[selectedChatMode] || "auto-code";
-
+ 
             let modelPayload:
               | { id: string; name: string; providerId: string }
               | undefined;
-
+ 
             // Build modelPayload - always try to create it if selectedModel exists
             if (selectedModel) {
               // Handle both old format (id, name, provider) and new format (id, name, providerId)
@@ -228,7 +229,7 @@ export function useStreamChat({
               const modelName = selectedModel.name;
               let providerId =
                 (selectedModel as any).providerId || selectedModel.provider;
-
+ 
               let displayName = modelName;
               let providerName = providerId; // Default to providerId if mapping fails
               
@@ -256,7 +257,7 @@ export function useStreamChat({
                   }
                 }
               }
-
+ 
               // Always create the modelPayload with all three fields
               if (modelId && modelName && providerId) {
                 modelPayload = {
@@ -266,7 +267,7 @@ export function useStreamChat({
                 };
               }
             }
-
+ 
             await chatsApi.streamChat(
               {
                 chatId,
@@ -284,7 +285,7 @@ export function useStreamChat({
                   setMessagesById((prev) => {
                     const currentMessages = prev.get(chatId) ?? [];
                     const next = new Map(prev);
-
+ 
                     // Check if we need to replace the temporary empty message or continue updating
                     const lastMsg = currentMessages.at(-1);
                     if (
@@ -313,7 +314,7 @@ export function useStreamChat({
                       );
                       next.set(chatId, updated);
                     }
-
+ 
                     return next;
                   });
                 },
@@ -325,12 +326,12 @@ export function useStreamChat({
                   extraFilesError?: any;
                 }) => {
                   // NOTE: Bypass proposal approval/rejection as of now - files should be visible immediately after chat completion
-
+ 
                   // Replace temporary message with real one
                   setMessagesById((prev) => {
                     const currentMessages = prev.get(chatId) ?? [];
                     const next = new Map(prev);
-
+ 
                     const filtered = currentMessages.filter(
                       (msg) =>
                         !(
@@ -338,7 +339,7 @@ export function useStreamChat({
                           msg.id === streamingMessageId
                         ),
                     );
-
+ 
                     next.set(chatId, [
                       ...filtered,
                       {
@@ -353,14 +354,14 @@ export function useStreamChat({
                         createdAt: new Date(),
                       },
                     ]);
-
+ 
                     return next;
                   });
-
+ 
                   // NOTE: Bypass proposal approval/rejection as of now - always open preview and refresh files
                   // Backend adds file details during chat response, so refreshApp() will fetch updated files
                   setIsPreviewOpen(true);
-
+ 
                   // Handle completion - refresh data
                   if (data.updatedFiles) {
                     refreshAppIframe();
@@ -368,7 +369,7 @@ export function useStreamChat({
                       checkProblems();
                     }
                   }
-
+ 
                   if (data.extraFiles) {
                     showExtraFilesToast({
                       files: data.extraFiles,
@@ -376,37 +377,37 @@ export function useStreamChat({
                       posthog,
                     });
                   }
-
+ 
                   refreshProposal(chatId);
                   refetchUserBudget();
-
+ 
                   setIsStreamingById((prev) => {
                     const next = new Map(prev);
                     next.set(chatId, false);
                     return next;
                   });
-
+ 
                   refreshChats();
-
+ 
                   // Invalidate messages query to refetch from backend with persisted assistant message
                   await queryClient.invalidateQueries({
                     queryKey: ["chats", chatId, "messages"],
                     refetchType: "active",
                   });
-
+ 
                   // NOTE: Bypass proposal approval/rejection as of now - refreshApp fetches files from backend
                   await refreshApp();
-
+ 
                   // NOTE: Force CodeView to re-render and refetch file content by incrementing preview panel key
                   setPreviewPanelKey((prevKey) => prevKey + 1);
-
-                  // refreshVersions();
+ 
+                  refreshVersions();
                   countTokens(chatId, "");
                   onSettled?.();
-
+ 
                   // Sync files to Docker container after chat completion
                   // await syncToDocker();
-
+ 
                   // Cleanup abort controller
                   abortControllersRef.current.delete(chatId);
                 },
@@ -417,19 +418,19 @@ export function useStreamChat({
                     next.set(chatId, error);
                     return next;
                   });
-
+ 
                   setIsStreamingById((prev) => {
                     const next = new Map(prev);
                     next.set(chatId, false);
                     return next;
                   });
-
+ 
                   refreshChats();
                   refreshApp();
-                  // refreshVersions();
+                  refreshVersions();
                   countTokens(chatId, "");
                   onSettled?.();
-
+ 
                   // Cleanup abort controller
                   abortControllersRef.current.delete(chatId);
                 },
@@ -451,10 +452,10 @@ export function useStreamChat({
               return next;
             });
           }
-
+ 
           return;
         }
-
+ 
         // IPC mode (Electron)
         (ipcClient as any).streamMessage(prompt, {
           selectedComponent: selectedComponent ?? null,
@@ -470,7 +471,7 @@ export function useStreamChat({
               });
               hasIncrementedStreamCount = true;
             }
-
+ 
             setMessagesById((prev) => {
               const next = new Map(prev);
               next.set(chatId, updatedMessages);
@@ -493,9 +494,9 @@ export function useStreamChat({
               });
             }
             refreshProposal(chatId);
-
+ 
             refetchUserBudget();
-
+ 
             // Keep the same as below
             setIsStreamingById((prev) => {
               const next = new Map(prev);
@@ -504,9 +505,9 @@ export function useStreamChat({
             });
             refreshChats();
             refreshApp();
-            // refreshVersions();
+            refreshVersions();
             countTokens(chatId, "");
-
+ 
             // Sync files to Docker container
             // if (selectedAppId) {
             //   import('@/api/endpoints/docker').then(({ dockerApi }) => {
@@ -515,7 +516,7 @@ export function useStreamChat({
             //     });
             //   });
             // }
-
+ 
             onSettled?.();
           },
           onError: (errorMessage: string) => {
@@ -525,7 +526,7 @@ export function useStreamChat({
               next.set(chatId, errorMessage);
               return next;
             });
-
+ 
             // Keep the same as above
             setIsStreamingById((prev) => {
               const next = new Map(prev);
@@ -534,7 +535,7 @@ export function useStreamChat({
             });
             refreshChats();
             refreshApp();
-            // refreshVersions();
+            refreshVersions();
             countTokens(chatId, "");
             onSettled?.();
           },
@@ -583,7 +584,7 @@ export function useStreamChat({
       posthog,
     ],
   );
-
+ 
   const cancelStream = useCallback(
     (chatIdToCancel: number) => {
       const controller = abortControllersRef.current.get(chatIdToCancel);
@@ -596,7 +597,7 @@ export function useStreamChat({
           return next;
         });
       }
-
+ 
       // Also try to cancel via IPC if in Electron mode
       try {
         const ipcClient = IpcClient.getInstance();
@@ -609,7 +610,7 @@ export function useStreamChat({
     },
     [setIsStreamingById],
   );
-
+ 
   // NOTE: The chat streamining in chatpanel is not working properly with this code
   // Cleanup: Abort all active streams on component unmount
   // useEffect(() => {
@@ -625,7 +626,7 @@ export function useStreamChat({
   //     abortControllersRef.current.clear();
   //   };
   // }, []); // Empty deps - only run cleanup on unmount, not on every state change
-
+ 
   return {
     streamMessage,
     cancelStream,

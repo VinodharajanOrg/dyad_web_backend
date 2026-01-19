@@ -101,13 +101,9 @@ export const ActionHeader = () => {
     }
   }, [dockerStatus, selectedAppId, setAppUrlObj]);
 
-  // NOTE: Use dynamic url for publish based on environment
+  // NOTE: Toggle publish panel instead of opening external URL
   const handlePublishClick = () => {
-    if (isPublishEnabled && dockerStatus?.port) {
-      const port = Number(String(dockerStatus.port).replace(/[^0-9]/g, ""));
-      const url = `http://localhost:${port}`;
-      window.open(url, "_blank");
-    }
+    setPreviewMode("publish");
   };
 
   // Track window width
@@ -342,8 +338,8 @@ export const ActionHeader = () => {
             "Publish",
             "publish-mode-button",
             undefined,
-            !isPublishEnabled,
-            isPublishEnabled ? handlePublishClick : undefined,
+            false, // Always enabled for GitHub publishing
+            handlePublishClick,
           )}
         </div>
         {/* Chat activity bell and more options disabled - As of now these features are disabled */}
