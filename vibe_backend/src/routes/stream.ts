@@ -12,6 +12,7 @@ import { logger } from '../utils/logger';
 import { sanitizePromptInput } from '../utils/sanitize';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { GitService } from '../services/git_service';
 
 /**
  * HTTP Streaming API - Server-Sent Events (SSE)
@@ -50,6 +51,79 @@ function hasPackageJsonChanged(appPath: string, newContent: string): boolean {
     return true; // Assume changed if can't compare
   }
 }
+
+/**
+ * Generate a meaningful commit message based on user prompt and AI response
+ * Extracts key functionality from prompt and response
+ */
+function generateCommitMessage(userPrompt: string, aiResponse: string): string {
+  try {
+    // Clean up the prompt and response
+    const cleanPrompt = userPrompt.trim().toLowerCase();
+    const cleanResponse = aiResponse.trim().substring(0, 500).toLowerCase();
+    
+    // Extract key verbs and nouns from the prompt
+    // Common patterns: "build/create/add/implement X", "make X do Y"
+    const verbPatterns = [
+      /^(?:build|create|add|implement|make|develop|generate|setup|configure)\s+(?:a\s+)?(.+?)(?:\s+that|$|\s+to|\?)/i,
+      /^(?:modify|update|enhance|improve)\s+(?:the\s+)?(.+?)(?:\s+to|\s+by|$|\?)/i,
+      /^(.+?)\s+(?:component|page|form|functionality|feature)/i,
+      /^(?:enable|disable|fix|resolve)\s+(.+?)(?:\s+in|$|\?)/i,
+    ];
+    
+    let extractedFeature = '';
+    
+    // Try to extract feature from prompt using patterns
+    for (const pattern of verbPatterns) {
+      const match = cleanPrompt.match(pattern);
+      if (match && match[1]) {
+        extractedFeature = match[1].trim();
+        // Limit to first 40 characters
+        extractedFeature = extractedFeature.substring(0, 40);
+        break;
+      }
+    }
+    
+    // If we got a feature, format the commit message
+    if (extractedFeature) {
+      // Check if this is a continuation (KEEP GOING, continue, etc.)
+      if (cleanPrompt.includes('keep going') || cleanPrompt.includes('continue') || 
+          cleanPrompt.includes('next') || cleanPrompt.includes('improve')) {
+        return `Adding: ${extractedFeature}`;
+      }
+      
+      // First prompt - building something new
+      return `Building: ${extractedFeature}`;
+    }
+    
+    // Fallback: try to extract from AI response (look for dyad tags and descriptions)
+    const dyadWriteMatch = aiResponse.match(/<dyad-write\s+path="([^"]+)"/);
+    if (dyadWriteMatch) {
+      const filePath = dyadWriteMatch[1];
+      const fileType = filePath.split('.').pop() || 'file';
+      
+      // Try to infer what was done
+      if (aiResponse.includes('form') || aiResponse.includes('input') || aiResponse.includes('signup')) {
+        return `Building: signup form components`;
+      }
+      if (aiResponse.includes('button') || aiResponse.includes('ui')) {
+        return `Adding: UI components and styling`;
+      }
+      if (aiResponse.includes('function') || aiResponse.includes('logic')) {
+        return `Adding: business logic and handlers`;
+      }
+      
+      return `Adding: ${fileType} file updates`;
+    }
+    
+    // Last fallback - use a generic message
+    return `AI: Update app`;
+  } catch (error) {
+    logger.warn('Error generating commit message', { error: String(error) });
+    return `AI: Update app`;
+  }
+}
+
 
 interface ChatStreamRequest {
   chatId: number;
@@ -230,6 +304,7 @@ async function handleChatStream(
   const aiService = AIService.instance;
   const codebaseService = new CodebaseService();
   const promptService = new PromptService();
+  const gitService = new GitService();
 
   let abortController: AbortController | undefined;
 
@@ -831,7 +906,62 @@ async function handleChatStream(
         chatId: req.chatId,
         totalOperations: fileChanges.length,
       });
+      // STEP 16.5: Commit changes to git (if files were modified)
+      if (fileChanges.length > 0) {
+        try {
+          logger.info('Committing changes to git', {
+            service: 'stream',
+            chatId: req.chatId,
+            appId: String(app.id),
+            fileCount: fileChanges.length
+          });
 
+          sendEvent('git:committing', {
+            chatId: req.chatId,
+            appId: app.id,
+            message: 'Committing changes...',
+          });
+
+          // Initialize git repo if not already done
+          await gitService.init(app.id.toString());
+
+          // Stage all changes
+          await gitService.add(app.id.toString(), '.');
+
+          // Commit changes with a meaningful, functionality-specific message
+          const commitMessage = generateCommitMessage(processedPrompt, fullResponse);
+          const sha = await gitService.commit(app.id.toString(), commitMessage);
+
+          logger.info('Changes committed to git', {
+            service: 'stream',
+            chatId: req.chatId,
+            appId: String(app.id),
+            sha,
+            commitMessage
+          });
+
+          sendEvent('git:committed', {
+            chatId: req.chatId,
+            appId: app.id,
+            sha,
+            message: 'Changes committed',
+            success: true,
+          });
+        } catch (gitError: any) {
+          logger.warn('Git commit failed (non-blocking)', gitError, {
+            service: 'stream',
+            chatId: req.chatId,
+            appId: String(app.id)
+          });
+          
+          sendEvent('git:commit-failed', {
+            chatId: req.chatId,
+            appId: app.id,
+            error: gitError.message,
+            message: 'Git commit failed (continuing)',
+          });
+        }
+      }
       // STEP 17.5: Handle dependency additions by updating package.json
       // STEP 17.5: Install dependencies directly using pnpm add
       if (packagesToAdd.length > 0) {

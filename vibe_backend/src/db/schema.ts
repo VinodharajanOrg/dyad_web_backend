@@ -286,3 +286,28 @@ export const userRoles = pgTable('user_roles', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
+// Git Integrations (OAuth tokens)
+export const gitIntegrations = pgTable(
+  'git_integrations',
+  {
+    id: serial('id').primaryKey(),
+
+    // Keycloak user id (same value used in apps.user_id)
+    userId: text('user_id').notNull(),
+
+    // github | gitlab (future)
+    provider: text('provider').notNull(),
+
+    // Encrypted OAuth token fields
+    accessTokenEncrypted: text('access_token_encrypted').notNull(),
+    accessTokenIv: text('access_token_iv').notNull(),
+    accessTokenTag: text('access_token_tag').notNull(),
+
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    uniqueUserProvider: unique('unique_user_provider')
+      .on(table.userId, table.provider),
+  })
+);
