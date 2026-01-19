@@ -8,6 +8,8 @@ import { db } from '../db';
 import { apps, gitIntegrations } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { encryptGitToken, decryptGitToken } from '../utils/gitTokenCrypto';
+import { AppService } from './app_service';
+import { logger } from '../utils/logger';
 
 type GithubRepoApiResponse = {
   name: string;
@@ -45,16 +47,18 @@ const fsForGit = {
  */
 export class GitService {
   private readonly baseDir: string;
+  private readonly appService: AppService;
 
   constructor() {
     // Use the same base directory as AppService for consistency
     // APPS_BASE_DIR is set in .env, defaults to ./apps
     this.baseDir = process.env.APPS_BASE_DIR || process.env.DATA_DIR || path.join(__dirname, '../../data/apps');
+    this.appService = new AppService();
   }
 
   /**
    * Get the actual app directory path from the database
-   * The appId parameter can be numeric, but we need the real path stored in the database
+   * Returns the absolute path by resolving relative paths from the database
    */
   private async getRepoPath(appId: string): Promise<string> {
     try {
@@ -63,14 +67,14 @@ export class GitService {
       
       if (!app) {
         // Fallback to appId-based path if app not found
-        console.warn(`[GitService.getRepoPath] App ${appId} not found in database, falling back to numeric path`);
+        logger.warn('App not found in database, falling back to numeric path', { service: 'git', appId });
         return path.join(this.baseDir, appId);
       }
       
-      // Use the actual app.path from database (already contains full or relative path)
-      return app.path;
+      // CRITICAL FIX: Resolve relative paths to absolute paths using AppService
+      return this.appService.getFullAppPath(app.path);
     } catch (error: any) {
-      console.error(`[GitService.getRepoPath] Error fetching app path for ${appId}:`, error.message);
+      logger.error('Error fetching app path', error, { service: 'git', appId });
       // Fallback to appId-based path
       return path.join(this.baseDir, appId);
     }
@@ -113,7 +117,7 @@ export class GitService {
     for (const [filepath, head, workdir, stage] of status) {
       // If file is new, modified, or deleted
       if (workdir !== stage) {
-        console.log(`[GitService.add] Staging file: ${filepath}`);
+        logger.info('Staging file', { service: 'git', filepath });
 
         await git.add({
           fs: fsForGit,
@@ -123,9 +127,9 @@ export class GitService {
       }
     }
 
-    console.log(`[GitService.add] All changes staged for appId=${appId}`);
+    logger.info('All changes staged', { service: 'git', appId });
   } catch (error: any) {
-    console.error(`[GitService.add] FAILED for appId=${appId}:`, error);
+    logger.error('Failed to add files', error, { service: 'git', appId });
     throw new AppError(500, `Failed to add files: ${error.message}`);
   }
 }
@@ -161,14 +165,14 @@ export class GitService {
     try {
       const dir = await this.getRepoPath(appId);
       
-      console.log(`[GitService.commit] Starting commit for appId=${appId}, message="${message}"`);
+      logger.info('Starting commit', { service: 'git', appId, message });
       
       // Check the index
       try {
         const status = await git.statusMatrix({ fs: fsForGit, dir });
-        console.log(`[GitService.commit] Git status matrix (staged changes):`, status.slice(0, 10));
+        logger.debug('Git status matrix (staged changes)', { service: 'git', appId, statusCount: status.slice(0, 10).length });
       } catch (e) {
-        console.log(`[GitService.commit] Could not get status matrix:`, (e as any).message);
+        logger.debug('Could not get status matrix', { service: 'git', appId, error: (e as any).message });
       }
       
       const sha = await git.commit({
@@ -181,11 +185,11 @@ export class GitService {
         },
       });
       
-      console.log(`[GitService.commit] Commit successful for appId=${appId}, sha=${sha}`);
+      logger.info('Commit successful', { service: 'git', appId, sha });
       
       return sha;
     } catch (error: any) {
-      console.error(`[GitService.commit] FAILED for appId=${appId}:`, error);
+      logger.error('Commit failed', error, { service: 'git', appId });
       throw new AppError(500, `Failed to commit: ${error.message}`);
     }
   }
@@ -194,13 +198,13 @@ export class GitService {
     try {
       const dir = await this.getRepoPath(appId);
       
-      console.log(`[GitService.log] Starting log for appId=${appId}, dir=${dir}`);
+      logger.debug('Starting log', { service: 'git', appId, dir });
       
       // Check if .git directory exists
       const gitDir = path.join(dir, '.git');
       if (!fsSync.existsSync(gitDir)) {
         // Repository not initialized yet, return empty list
-        console.log(`[GitService.log] No .git directory found at ${gitDir}, returning empty list`);
+        logger.debug('No .git directory found, returning empty list', { service: 'git', appId, gitDir });
         return [];
       }
       
@@ -210,17 +214,17 @@ export class GitService {
       // This ensures we get ALL commits even if we're in a detached HEAD state
       // Use fsForGit which has both sync and async fs methods
       try {
-        console.log(`[GitService.log] Trying to get commits from 'main' branch`);
+        logger.debug('Trying to get commits from main branch', { service: 'git', appId });
         commits = await git.log({
           fs: fsForGit,
           dir,
           ref: 'main',
           depth,
         });
-        console.log(`[GitService.log] Got ${commits.length} commits from 'main'`);
+        logger.debug('Got commits from main', { service: 'git', appId, count: commits.length });
       } catch (e) {
         // If 'main' doesn't exist, try 'master' (older git convention)
-        console.log(`[GitService.log] 'main' branch not found, trying 'master'`);
+        logger.debug('main branch not found, trying master', { service: 'git', appId });
         try {
           commits = await git.log({
             fs: fsForGit,
@@ -228,17 +232,17 @@ export class GitService {
             ref: 'master',
             depth,
           });
-          console.log(`[GitService.log] Got ${commits.length} commits from 'master'`);
+          logger.debug('Got commits from master', { service: 'git', appId, count: commits.length });
         } catch (e2) {
           // If neither branch exists, fall back to current HEAD
           // This handles the case of first commit (before branches exist)
-          console.log(`[GitService.log] 'master' branch not found, trying HEAD`);
+          logger.debug('master branch not found, trying HEAD', { service: 'git', appId });
           commits = await git.log({
             fs: fsForGit,
             dir,
             depth,
           });
-          console.log(`[GitService.log] Got ${commits.length} commits from HEAD`);
+          logger.debug('Got commits from HEAD', { service: 'git', appId, count: commits.length });
         }
       }
       
@@ -249,12 +253,12 @@ export class GitService {
         timestamp: commit.commit.author.timestamp,
       }));
       
-      console.log(`[GitService.log] Returning ${result.length} formatted commits for appId=${appId}`);
+      logger.debug('Returning formatted commits', { service: 'git', appId, count: result.length });
       
       return result;
     } catch (error: any) {
       // Log the error but return empty array for non-critical failures
-      console.error(`[GitService.log] Error getting commits for appId=${appId}:`, error.message);
+      logger.error('Error getting commits', error, { service: 'git', appId });
       // Return empty array instead of throwing to allow UI to show "No versions"
       return [];
     }
@@ -263,44 +267,44 @@ export class GitService {
   async checkout(appId: string, ref: string): Promise<void> {
     try {
       const dir = await this.getRepoPath(appId);
-      console.log(`[GitService.checkout] Starting: appId=${appId}, ref=${ref}, dir=${dir}`);
+      logger.info('Starting checkout', { service: 'git', appId, ref, dir });
       
       // Verify git repo exists
       const gitDir = path.join(dir, '.git');
       if (!fsSync.existsSync(gitDir)) {
         throw new Error(`Git repository not found at ${gitDir}`);
       }
-      console.log(`[GitService.checkout] Git repo confirmed at ${gitDir}`);
+      logger.debug('Git repo confirmed', { service: 'git', appId, gitDir });
       
       // List ALL files in working directory to see what we're working with
       const allFiles = await fs.readdir(dir, { recursive: false }).catch(() => []);
-      console.log(`[GitService.checkout] Directory structure of ${dir}:`, allFiles);
+      logger.debug('Directory structure', { service: 'git', appId, fileCount: allFiles.length });
       
       // Get files before checkout for diagnostics
       const srcDir = path.join(dir, 'src');
       const before = await fs.readdir(srcDir).catch(() => []);
-      console.log(`[GitService.checkout] Files in src/ BEFORE checkout:`, before.slice(0, 5));
+      logger.debug('Files in src/ before checkout', { service: 'git', appId, count: before.slice(0, 5).length });
 
       // Check what branches exist
       try {
         const branches = await git.listBranches({ fs: fsForGit, dir });
-        console.log(`[GitService.checkout] Available branches:`, branches);
+        logger.debug('Available branches', { service: 'git', appId, branches });
       } catch (e) {
-        console.log(`[GitService.checkout] Could not list branches:`, (e as any).message);
+        logger.debug('Could not list branches', { service: 'git', appId, error: (e as any).message });
       }
 
       // Check if the ref exists as a commit
       try {
         const resolvedRef = await git.resolveRef({ fs: fsForGit, dir, ref });
-        console.log(`[GitService.checkout] Resolved ref "${ref}" to commit:`, resolvedRef);
+        logger.debug('Resolved ref to commit', { service: 'git', appId, ref, resolvedRef });
       } catch (e) {
-        console.log(`[GitService.checkout] Could not resolve ref "${ref}":`, (e as any).message);
+        logger.debug('Could not resolve ref', { service: 'git', appId, ref, error: (e as any).message });
       }
 
       // ref can be a commit hash (oid) or branch name
       // Use force: true to allow checking out to detached HEAD state
       // Pass fsForGit which has both sync and async fs methods
-      console.log(`[GitService.checkout] About to call git.checkout with ref="${ref}"`);
+      logger.debug('About to call git.checkout', { service: 'git', appId, ref });
       
       const result = await git.checkout({ 
         fs: fsForGit, 
@@ -311,15 +315,15 @@ export class GitService {
 
       // Get files after checkout to verify they changed
       const after = await fs.readdir(srcDir).catch(() => []);
-      console.log(`[GitService.checkout] Files in src/ AFTER checkout:`, after.slice(0, 5));
+      logger.debug('Files in src/ after checkout', { service: 'git', appId, count: after.slice(0, 5).length });
       
       // List all files again after checkout
       const allFilesAfter = await fs.readdir(dir, { recursive: false }).catch(() => []);
-      console.log(`[GitService.checkout] Directory structure AFTER checkout:`, allFilesAfter);
+      logger.debug('Directory structure after checkout', { service: 'git', appId, fileCount: allFilesAfter.length });
       
-      console.log(`[GitService.checkout] Checkout successful: appId=${appId}, ref=${ref}`, result);
+      logger.info('Checkout successful', { service: 'git', appId, ref });
     } catch (error: any) {
-      console.error(`[GitService.checkout] FAILED: appId=${appId}, ref=${ref}, error=`, error);
+      logger.error('Checkout failed', error, { service: 'git', appId, ref });
       throw new AppError(500, `Failed to checkout ${ref}: ${error.message}`);
     }
   }
@@ -386,7 +390,7 @@ export class GitService {
    * Directly extracts the entire tree from the target commit to ensure perfect reversion
    */
   private async stageToRevert(dir: string, targetOid: string): Promise<void> {
-    console.log(`[GitService.stageToRevert] Starting for target ${targetOid}`);
+    logger.info('Starting stageToRevert', { service: 'git', targetOid });
 
     try {
       // First, collect all current files so we can delete ones not in target
@@ -408,12 +412,12 @@ export class GitService {
             }
           }
         } catch (e) {
-          console.log(`[GitService.stageToRevert] Error walking directory ${dirPath}:`, e);
+          logger.debug('Error walking directory', { service: 'git', dirPath, error: String(e) });
         }
       };
 
       await walkCurrentDir(dir);
-      console.log(`[GitService.stageToRevert] Found ${currentFiles.size} current files in working directory`);
+      logger.debug('Found current files in working directory', { service: 'git', count: currentFiles.size });
 
       // Get all files from the target commit
       const targetFiles = new Set<string>();
@@ -434,7 +438,7 @@ export class GitService {
         throw new Error(`Target commit ${targetOid} has no tree`);
       }
 
-      console.log(`[GitService.stageToRevert] Target tree OID: ${treeOid}`);
+      logger.debug('Target tree OID', { service: 'git', treeOid });
 
       // Walk the target tree to get all files
       const walkTargetTree = async (treeOidToWalk: string, pathPrefix: string = '') => {
@@ -446,15 +450,15 @@ export class GitService {
           });
 
           if (!treeObj.object || typeof treeObj.object === 'string') {
-            console.log(`[GitService.stageToRevert] Tree object is invalid`);
+            logger.debug('Tree object is invalid', { service: 'git' });
             return;
           }
 
           const treeData = treeObj.object as any;
           
           // Debug: log the structure
-          console.log(`[GitService.stageToRevert] Tree data keys: ${Object.keys(treeData).join(', ')}`);
-          console.log(`[GitService.stageToRevert] treeData.entries type: ${typeof treeData.entries}`);
+          logger.debug('Tree data keys', { service: 'git', keys: Object.keys(treeData).join(', ') });
+          logger.debug('treeData.entries type', { service: 'git', type: typeof treeData.entries });
           
           // isomorphic-git returns tree entries as numeric-indexed array-like object
           // Get all values from the object (which are the tree entries)
@@ -463,18 +467,18 @@ export class GitService {
           });
           
           if (entries.length === 0) {
-            console.log(`[GitService.stageToRevert] Tree has no entries after filtering`);
+            logger.debug('Tree has no entries after filtering', { service: 'git' });
             return;
           }
 
-          console.log(`[GitService.stageToRevert] Processing ${entries.length} entries from tree ${treeOidToWalk}`);
+          logger.debug('Processing entries from tree', { service: 'git', count: entries.length, treeOid: treeOidToWalk });
 
           for (const entry of entries) {
             const entryPath = pathPrefix ? `${pathPrefix}/${(entry as any).path}` : (entry as any).path;
 
             if ((entry as any).type === 'blob') {
               targetFiles.add(entryPath);
-              console.log(`[GitService.stageToRevert] Target has file: ${entryPath}`);
+              logger.debug('Target has file', { service: 'git', entryPath });
 
               // Extract the blob directly
               try {
@@ -485,16 +489,16 @@ export class GitService {
                 });
 
                 if (!blobObj.object || typeof blobObj.object === 'string') {
-                  console.error(`[GitService.stageToRevert] Blob is invalid: ${entryPath}`);
+                  logger.error('Blob is invalid', undefined, { service: 'git', entryPath });
                   continue;
                 }
 
                 const fullPath = path.join(dir, entryPath);
                 await fs.mkdir(path.dirname(fullPath), { recursive: true });
                 await fs.writeFile(fullPath, Buffer.from(blobObj.object as Uint8Array));
-                console.log(`[GitService.stageToRevert] Extracted: ${entryPath}`);
+                logger.debug('Extracted file', { service: 'git', entryPath });
               } catch (e) {
-                console.error(`[GitService.stageToRevert] Error extracting blob ${entryPath}:`, e);
+                logger.error('Error extracting blob', e as Error, { service: 'git', entryPath });
                 throw e;
               }
             } else if ((entry as any).type === 'tree') {
@@ -503,23 +507,23 @@ export class GitService {
             }
           }
         } catch (e) {
-          console.error(`[GitService.stageToRevert] Error walking tree ${treeOidToWalk}:`, e);
+          logger.error('Error walking tree', e as Error, { service: 'git', treeOid: treeOidToWalk });
           throw e;
         }
       };
 
       await walkTargetTree(treeOid);
-      console.log(`[GitService.stageToRevert] Extracted ${targetFiles.size} files from target commit`);
+      logger.debug('Extracted files from target commit', { service: 'git', count: targetFiles.size });
 
       // Delete files that exist in current directory but not in target
       for (const filePath of currentFiles) {
         if (!targetFiles.has(filePath)) {
           const fullPath = path.join(dir, filePath);
-          console.log(`[GitService.stageToRevert] Deleting file not in target: ${filePath}`);
+          logger.debug('Deleting file not in target', { service: 'git', filePath });
           try {
             await fs.unlink(fullPath);
           } catch (e) {
-            console.error(`[GitService.stageToRevert] Error deleting ${filePath}:`, e);
+            logger.error('Error deleting file', e as Error, { service: 'git', filePath });
           }
         }
       }
@@ -544,23 +548,23 @@ export class GitService {
             }
           }
         } catch (e) {
-          console.log(`[GitService.stageToRevert] Error cleaning up dirs:`, e);
+          logger.debug('Error cleaning up dirs', { service: 'git', error: String(e) });
         }
       };
 
       await cleanupEmptyDirs(dir);
-      console.log(`[GitService.stageToRevert] Cleaned up empty directories`);
+      logger.debug('Cleaned up empty directories', { service: 'git' });
 
-      console.log(`[GitService.stageToRevert] Staging all changes with git add`);
+      logger.debug('Staging all changes with git add', { service: 'git' });
       // Stage all changes
       await git.add({
         fs: fsForGit,
         dir,
         filepath: '.',
       });
-      console.log(`[GitService.stageToRevert] Complete - all files extracted and staged`);
+      logger.info('Complete - all files extracted and staged', { service: 'git' });
     } catch (error) {
-      console.error(`[GitService.stageToRevert] Error:`, error);
+      logger.error('stageToRevert error', error as Error, { service: 'git' });
       throw error;
     }
   }
@@ -577,13 +581,13 @@ export class GitService {
   async revert(appId: string, targetOid: string): Promise<string> {
     try {
       const dir = await this.getRepoPath(appId);
-      console.log(`[GitService.revert] Starting revert for appId=${appId}, targetOid=${targetOid}`);
+      logger.info('Starting revert', { service: 'git', appId, targetOid });
       // Verify git repo exists
       const gitDir = path.join(dir, '.git');
       if (!fsSync.existsSync(gitDir)) {
         throw new Error(`Git repository not found at ${gitDir}`);
       }
-      console.log(`[GitService.revert] Checking out to main branch to ensure we're on a proper branch`);
+      logger.debug('Checking out to main branch', { service: 'git', appId });
       try {
         await git.checkout({
           fs: fsForGit,
@@ -592,7 +596,7 @@ export class GitService {
           force: true,
         });
       } catch (e) {
-        console.log(`[GitService.revert] Could not checkout main, trying master`);
+        logger.debug('Could not checkout main, trying master', { service: 'git', appId });
         try {
           await git.checkout({
             fs: fsForGit,
@@ -601,16 +605,16 @@ export class GitService {
             force: true,
           });
         } catch (e2) {
-          console.warn(`[GitService.revert] Could not checkout main or master`);
+          logger.warn('Could not checkout main or master', { service: 'git', appId });
           throw new Error(`Could not checkout to main or master branch: ${(e as any).message}`);
         }
       }
       // Stage the target commit's files using statusMatrix approach (from original_dyad)
-      console.log(`[GitService.revert] Staging files from target commit ${targetOid}`);
+      logger.debug('Staging files from target commit', { service: 'git', appId, targetOid });
       await this.stageToRevert(dir, targetOid);
       // Create a new commit with the revert message
       const revertMessage = `Reverted all changes back to version ${targetOid}`;
-      console.log(`[GitService.revert] Creating revert commit with message: ${revertMessage}`);
+      logger.debug('Creating revert commit', { service: 'git', appId, message: revertMessage });
       const newSha = await git.commit({
         fs: fsForGit,
         dir,
@@ -620,10 +624,10 @@ export class GitService {
           email: 'dyad@app.com',
         },
       });
-      console.log(`[GitService.revert] Revert successful! New commit SHA: ${newSha}`);
+      logger.info('Revert successful', { service: 'git', appId, newSha });
       return newSha;
     } catch (error: any) {
-      console.error(`[GitService.revert] FAILED: appId=${appId}, targetOid=${targetOid}, error=`, error);
+      logger.error('Revert failed', error, { service: 'git', appId, targetOid });
       throw new AppError(500, `Failed to revert to commit ${targetOid}: ${error.message}`);
     }
   }
@@ -880,21 +884,50 @@ async syncToGithub(
       value: remoteUrl,
     });
   }
-  //Fetch latest from remote
-  await git.fetch({
-    fs: fsForGit,
-    http,
-    dir,
-    remote: 'origin',
-    onAuth: () => ({ username: token, password: '' }),
-  });
-  //Ensure local branch exists
-  const localBranches = await git.listBranches({ fs: fsForGit, dir });
-  if (!localBranches.includes(branch)) {
-    await git.branch({ fs: fsForGit, dir, ref: branch });
+  //Fetch latest from remote (skip if no HEAD exists yet - brand new repo)
+  let hasHead = true;
+  try {
+    await git.fetch({
+      fs: fsForGit,
+      http,
+      dir,
+      remote: 'origin',
+      onAuth: () => ({ username: token, password: '' }),
+    });
+  } catch (err: any) {
+    // If HEAD doesn't exist yet (brand new repo), continue
+    if (err.code === 'NotFoundError' && err.data?.what === 'HEAD') {
+      logger.info('No HEAD found - new repo, skipping fetch', { service: 'git', appId });
+      hasHead = false;
+    } else {
+      throw err;
+    }
   }
-  //Checkout branch
-  await git.checkout({ fs: fsForGit, dir, ref: branch });
+  
+  // For brand new repos without HEAD, create initial commit first
+  if (!hasHead) {
+    logger.info('Creating initial commit for new repo', { service: 'git', appId });
+    //Stage all files
+    await git.add({ fs: fsForGit, dir, filepath: '.' });
+    //Create initial commit
+    await git.commit({
+      fs: fsForGit,
+      dir,
+      message: 'Initial commit from Vibe-app',
+      author: { name: 'Dyad', email: 'dyad@app.com' },
+    });
+    //Create and checkout the branch
+    await git.branch({ fs: fsForGit, dir, ref: branch, checkout: true });
+  } else {
+    //Ensure local branch exists
+    const localBranches = await git.listBranches({ fs: fsForGit, dir });
+    if (!localBranches.includes(branch)) {
+      await git.branch({ fs: fsForGit, dir, ref: branch });
+    }
+    //Checkout branch
+    await git.checkout({ fs: fsForGit, dir, ref: branch });
+  }
+  
   const remoteBranches = await git.listBranches({
     fs: fsForGit,
     dir,
@@ -924,21 +957,25 @@ async syncToGithub(
       throw err;
     }
   }
-  //Stage all files
-  await git.add({ fs: fsForGit, dir, filepath: '.' });
-  //Commit if changes exist
-  const status = await git.statusMatrix({ fs: fsForGit, dir });
-  const hasChanges = status.some(
-    ([, head, workdir, stage]) => head !== workdir || workdir !== stage
-  );
+  
+  // Only stage and commit again if repo already had HEAD
   let sha: string | null = null;
-  if (hasChanges) {
-    sha = await git.commit({
-      fs: fsForGit,
-      dir,
-      message: force ? 'Force Sync from Vibe-app' : 'Sync from Vibe-app',
-      author: { name: 'Dyad', email: 'dyad@app.com' },
-    });
+  if (hasHead) {
+    //Stage all files
+    await git.add({ fs: fsForGit, dir, filepath: '.' });
+    //Commit if changes exist
+    const status = await git.statusMatrix({ fs: fsForGit, dir });
+    const hasChanges = status.some(
+      ([, head, workdir, stage]) => head !== workdir || workdir !== stage
+    );
+    if (hasChanges) {
+      sha = await git.commit({
+        fs: fsForGit,
+        dir,
+        message: force ? 'Force Sync from Vibe-app' : 'Sync from Vibe-app',
+        author: { name: 'Dyad', email: 'dyad@app.com' },
+      });
+    }
   }
   //Push to GitHub
   try {

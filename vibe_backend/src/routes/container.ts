@@ -330,7 +330,7 @@ router.post('/:appId/restart',requireAuth,validate(appIdField, 'params'), async 
   try {
     const { appId } = req.params;
     const userId = (req as any).user?.id;
-    console.log('Restarting container for app', appId);
+    logger.info('Restarting container for app', { service: 'container-route', appId });
     // Check if app exists
     const app = await appService.getApp(appId, userId);
     

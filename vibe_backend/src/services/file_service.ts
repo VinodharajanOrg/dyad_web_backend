@@ -5,22 +5,30 @@ import { db } from '../db';
 import { apps } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { shouldIgnorePath } from '../utils/file_ignore';
+import { AppService } from './app_service';
 
 /**
  * File Service - Handles file system operations
  * Migrated from src/ipc/handlers/app_handlers.ts file operations
  */
 export class FileService {
+  private readonly appService: AppService;
+
+  constructor() {
+    this.appService = new AppService();
+  }
   
   /**
    * Get the app's actual directory path from the database
+   * Returns the absolute path by resolving relative paths from the database
    */
   private async getAppPath(appId: string): Promise<string> {
     const [app] = await db.select().from(apps).where(eq(apps.id, Number.parseInt(appId)));
     if (!app) {
       throw new AppError(404, `App not found: ${appId}`);
     }
-    return app.path;
+    // CRITICAL FIX: Resolve relative paths to absolute paths using AppService
+    return this.appService.getFullAppPath(app.path);
   }
 
   private getFullPath(appPath: string, filePath: string = '') {

@@ -4,6 +4,7 @@ import { AppService } from '../services/app_service';
 import { asyncHandler } from '../middleware/errorHandler';
 import { validate } from "../middleware/validateBody";
 import { createAppSchema,updateAppSchema,appIdParamSchema } from '../db/validateSchema';
+import { logger } from '../utils/logger';
 const router = Router();
 const appService = new AppService();
 
@@ -248,7 +249,7 @@ router.post('/',requireAuth, validate(createAppSchema, 'body'),asyncHandler(asyn
         port: port,
       });
     }).catch(error => {
-      console.error('Failed to start container for new app:', error);
+      logger.error('Failed to start container for new app', error as Error, { service: 'apps-route', appId: String(app.id) });
     });
   }
   

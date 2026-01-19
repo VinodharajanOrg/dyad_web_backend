@@ -5,6 +5,7 @@ import { eq, ilike } from 'drizzle-orm';
 import { AppError } from '../middleware/errorHandler';
 import { encryptApiKey, decryptApiKey } from '../utils/crypto';
 import { AIService } from '../services/ai_service';
+import { logger } from '../utils/logger';
 /**
  * Settings Service - Manages user settings and AI configuration
  */
@@ -195,7 +196,7 @@ export class SettingsService {
 
       delete updatedKeys[providerId];
 
-      console.log('Updated Keys after deletion:', updatedKeys);
+      logger.debug('Updated Keys after deletion', { service: 'settings', providerId, keyCount: Object.keys(updatedKeys).length });
 
       const result = await this.updateSettings({ apiKeys: updatedKeys }, userId);
       const aiService = AIService.instance;

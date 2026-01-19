@@ -78,7 +78,7 @@ export class DockerService {
         stopContainer.on('error', () => resolve());
       });
     } catch (error) {
-      logger.info('Docker container not found', { service: 'docker', containerName, error: String(error) });
+      logger.debug('Docker container not found', { service: 'docker', containerName, error: String(error) });
     }
   }
 
@@ -301,11 +301,11 @@ EXPOSE ${this.config.port}
     const container = this.runningContainers.get(appId);
     
     if (!container) {
-      console.log(`No running container found for app ${appId}`);
+      logger.debug('No running container found', { service: 'docker', appId: String(appId) });
       return;
     }
 
-    console.log(`Stopping Docker container: ${container.containerName}`);
+    logger.info('Stopping Docker container', { service: 'docker', appId: String(appId), containerName: container.containerName });
     await this.stopAndRemoveContainer(container.containerName);
     this.runningContainers.delete(appId);
   }
@@ -321,7 +321,7 @@ EXPOSE ${this.config.port}
       throw new Error(`No running container found for app ${appId}`);
     }
 
-    console.log(`📦 Syncing files to container: ${container.containerName}`);
+    logger.info('Syncing files to container', { service: 'docker', appId: String(appId), containerName: container.containerName });
     
     // Files are already synced via volume mount (-v flag)
     // The volume mount ensures real-time file sync
@@ -341,7 +341,7 @@ EXPOSE ${this.config.port}
             
             touch.on('close', (code: any) => {
               if (code === 0) {
-                console.log(`✓ Touched file in container: ${filePath}`);
+                logger.debug('Touched file in container', { service: 'docker', appId: String(appId), filePath });
                 resolve();
               } else {
                 reject(new Error(`Failed to touch file: ${filePath}`));
@@ -351,12 +351,12 @@ EXPOSE ${this.config.port}
             touch.on('error', reject);
           });
         } catch (error) {
-          console.warn(`Warning: Could not touch file ${filePath}:`, error);
+          logger.warn('Could not touch file', { service: 'docker', appId: String(appId), filePath, error: String(error) });
         }
       }
     }
     
-    console.log(`✅ Files synced to container ${container.containerName}`);
+    logger.info('Files synced to container', { service: 'docker', appId: String(appId), containerName: container.containerName });
   }
 
   /**
@@ -396,7 +396,7 @@ EXPOSE ${this.config.port}
       command = this.getCommand({ installCommand, startCommand });
     }
 
-    console.log(`🚀 Quick starting container with command: ${command}`);
+    logger.info('Quick starting container', { service: 'docker', appId: String(appId), command });
 
     const process = spawn(
       'docker',
@@ -431,7 +431,7 @@ EXPOSE ${this.config.port}
       throw new Error(`Failed to spawn Docker container for app ${appId}`);
     }
 
-    console.log(`🐳 Quick start container launched: ${containerName}`);
+    logger.info('Quick start container launched', { service: 'docker', appId: String(appId), containerName });
 
     this.runningContainers.set(appId, {
       process,
@@ -444,13 +444,13 @@ EXPOSE ${this.config.port}
     if (process.stdout) {
       process.stdout.on('data', (data: any) => {
         const output = data.toString();
-        console.log(`[App ${appId}] ${output.trim()}`);
+        logger.debug('App stdout', { service: 'docker', appId: String(appId), output: output.trim() });
         
         const container = this.runningContainers.get(appId);
         if (container) {
           if (output.includes('Local:') || output.includes('ready in')) {
             container.isReady = true;
-            console.log(`✅ Container ready and serving at http://localhost:${this.config.port}`);
+            logger.info('Container ready and serving', { service: 'docker', appId: String(appId), port: this.config.port });
           }
           if (output.includes('packages in') || output.includes('Already up to date')) {
             container.installedDependencies = true;
@@ -461,17 +461,17 @@ EXPOSE ${this.config.port}
 
     if (process.stderr) {
       process.stderr.on('data', (data: any) => {
-        console.error(`[App ${appId} ERR] ${data.toString().trim()}`);
+        logger.warn('App stderr', { service: 'docker', appId: String(appId), error: data.toString().trim() });
       });
     }
 
     process.on('close', (code: any) => {
-      console.log(`Container ${containerName} exited with code: ${code}`);
+      logger.info('Container exited', { service: 'docker', containerName, exitCode: code });
       this.runningContainers.delete(appId);
     });
 
     process.on('error', (err: any) => {
-      console.error(`Container error for app ${appId}:`, err);
+      logger.error('Container error', err, { service: 'docker', appId: String(appId) });
       this.runningContainers.delete(appId);
     });
   }
@@ -503,11 +503,11 @@ EXPOSE ${this.config.port}
         stdio: 'pipe',
       });
       rm.on('close', () => {
-        console.log(`Removed Docker volume: ${pnpmVolume}`);
+        logger.info('Removed Docker volume', { service: 'docker', volume: pnpmVolume });
         resolve();
       });
       rm.on('error', () => {
-        console.log(`Failed to remove Docker volume: ${pnpmVolume}`);
+        logger.warn('Failed to remove Docker volume', { service: 'docker', volume: pnpmVolume });
         resolve();
       });
     });
@@ -564,7 +564,7 @@ EXPOSE ${this.config.port}
    * Verify files are visible inside the container after mount
    */
   private async verifyContainerFiles(containerName: string, filePaths: string[]): Promise<void> {
-    console.log(`[Docker] Verifying files inside container: ${containerName}`);
+    logger.debug('Verifying files inside container', { service: 'docker', containerName });
     
     for (const filePath of filePaths.slice(0, 3)) { // Check first 3 files
       try {
@@ -591,9 +591,9 @@ EXPOSE ${this.config.port}
           });
         });
         
-        console.log(`[Docker] File visible in container: ${filePath}`);
+        logger.debug('File visible in container', { service: 'docker', filePath });
       } catch (err) {
-        console.error(`[Docker] File NOT visible in container: ${filePath}`, err);
+        logger.error('File NOT visible in container', err as Error, { service: 'docker', filePath });
       }
     }
   }

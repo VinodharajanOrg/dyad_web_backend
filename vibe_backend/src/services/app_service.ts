@@ -186,7 +186,7 @@ export class AppService {
       throw new AppError(404, `App not found: ${appId}`);
     } 
       const { renameFolder, ...restUpdates } = updates;
-      console.log("Existing app data:", existingApp);
+      logger.debug('Existing app data', { service: 'app', appId: String(appId), existingApp });
       // If renameFolder = true → update name & folder path
       if (renameFolder && restUpdates.name) {
         const oldPath = existingApp.path;
@@ -199,7 +199,7 @@ export class AppService {
 
         await fs.rename(oldPath, newPath);  
         restUpdates.path = newPath;
-        console.log("Rename folder flag:", restUpdates.name, renameFolder);  // update DB path
+        logger.debug('Rename folder flag', { service: 'app', name: restUpdates.name, renameFolder });  // update DB path
       } catch (err: any) {
         throw new AppError(
           500,

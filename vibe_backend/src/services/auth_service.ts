@@ -3,6 +3,7 @@ const provider = AuthFactory.createAuthProvider();
 import { userStore } from "../db/stores/user.store";
 import { sessionStore } from "../db/stores/session.store";
 import jwt from "jsonwebtoken";
+import { logger } from '../utils/logger';
 
 export class AuthService {
   private userStore = userStore;
@@ -66,7 +67,7 @@ export class AuthService {
 
     return { user, created, tokens: ssoUser };
   } catch (error) {
-    console.error("Error in handleCallback:", error);
+    logger.error('Error in handleCallback', error as Error, { service: 'auth' });
     throw error;
   }
   }

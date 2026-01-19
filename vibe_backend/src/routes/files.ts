@@ -4,6 +4,7 @@ import { asyncHandler } from '../middleware/errorHandler';
 import { appIdField, createAppFileSchema, pathQuerySchema } from '../db/validateSchema';
 import { validate } from '../middleware/validateBody';
 import { requireAuth } from '../middleware/auth.middleware';
+import { logger } from '../utils/logger';
 
 const router = Router();
 const fileService = new FileService();
@@ -161,7 +162,7 @@ router.post('/:appId/write',  validate(createAppFileSchema, 'body'), validate(ap
     }
   } catch (error) {
     // Log but don't fail the file write if container sync fails
-    console.warn('Container sync failed (container may not be running):', error);
+    logger.warn('Container sync failed (container may not be running)', { service: 'files-route', appId: req.params.appId, error: String(error) });
   }
   
   res.json({ success: true, message: 'File written successfully' });

@@ -926,7 +926,7 @@ async function handleChatStream(
           await gitService.init(app.id.toString());
 
           // Stage all changes
-          await gitService.add(app.id.toString(), '.');
+          await gitService.add(app.id.toString());
 
           // Commit changes with a meaningful, functionality-specific message
           const commitMessage = generateCommitMessage(processedPrompt, fullResponse);
