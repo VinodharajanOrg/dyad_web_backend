@@ -1,371 +1,242 @@
-# Dyad Backend Server
+# Vibe Backend Server
 
-A standalone Express.js backend for Dyad, migrated from Electron IPC architecture to a web-based REST API with WebSocket support.
-
-## 🚀 Features
-
-- ✅ **PostgreSQL Database** - Using Drizzle ORM with postgres.js driver
-- ✅ **REST API** - Express.js endpoints for apps, chats, files, and git operations
-- ✅ **SSE Streaming** - Server-Sent Events for real-time AI responses
-- ✅ **Docker Support** - Run generated apps in isolated containers (same as Dyad Desktop)
-- ✅ **Git Integration** - isomorphic-git for version control
-- ✅ **File Management** - Secure file operations with path traversal protection
-- ✅ **Multi-AI Provider** - OpenAI, Anthropic, Google Gemini support
-- ✅ **TypeScript** - Full type safety
+A standalone Express.js backend for Vibe, providing a modern REST API and WebSocket support for real-time features. This backend is designed for easy containerization, database integration, and multi-provider AI support.
 
 ## Tech Stack
 
-- **Runtime**: Node.js 18+
-- **Framework**: Express.js 4.18
-- **Database**: PostgreSQL 14+ with Drizzle ORM
-- **WebSocket**: ws 8.14
-- **Git**: isomorphic-git 1.25
-- **TypeScript**: 5.3
+- **Runtime:** Node.js 18+ (Dockerized with Node 22)
+- **Framework:** Express.js 4.18
+- **Database:** PostgreSQL (via Drizzle ORM and postgres.js)
+- **ORM:** Drizzle ORM
+- **Git Integration:** isomorphic-git
+- **TypeScript:** 5+
+- **Containerization:** Docker(with lifecycle management)
+- **Security:** helmet, express-rate-limit, CORS, dotenv
+- **API Docs:** Swagger (swagger-ui-express)
+- **AI Providers:** OpenAI, Anthropic, Google Gemini, Azure Foundry
 
-## Quick Start
+---
 
-### 1. Install Dependencies
+## Getting Started
+
+### 1. Configure Environment Variables
+
+All configuration is done via the `.env` file. This file controls database, server, authentication, AI, and container settings.
+
+#### Step-by-step .env setup:
+
+1. **Copy the example file:**
+	```bash
+	cp env.example .env
+	```
+	If `env.example` is missing, create a new `.env` file in the root of `vibe_backend`.
+
+2. **Edit `.env`** with your favorite editor. Here are the most important variables:
+
+	- `PORT=3001` — The port the backend will run on.
+	- `NODE_ENV=development` — Set to `production` for live deployments.
+	- `DATABASE_URL=postgresql://<user>:<password>@<host>:<port>/<dbname>` — Your PostgreSQL connection string. Example:
+	```
+	DATABASE_URL=postgresql://vibemc_user:your_password@<server>:<port>/vibemc
+	```
+	- `USE_HTTPS=false` — Set to `true` if you want HTTPS (requires SSL certs).
+	- `FRONTEND_URL=http://localhost:5173` — The URL of your frontend (for CORS).
+		- `FRONTEND_URL=http://<server>:<port>` — The URL of your frontend (for CORS).
+	- `CONTAINERIZATION_ENABLED=true` — Enable Docker/Podman container support.
+	- `OPENAI_API_KEY=your-openai-api-key-here` — (Optional) For AI features.
+	- `GOOGLE_GENERATIVE_AI_API_KEY=your-google-api-key-here` — (Optional) For Gemini AI.
+	- `AUTH_PROVIDER=keycloak` — (Optional) For authentication integration.
+
+	> **Tip:** The `.env` file is well-commented. Read each section for more advanced options (logging, container limits, AI models, etc).
+
+3. **Save the file.**
+
+### 2. Set Up PostgreSQL
+
+You need a running PostgreSQL instance. Example setup (using psql):
 
 ```bash
-npm install
+psql postgres -c "CREATE DATABASE vibemc;"
+psql postgres -c "CREATE USER vibemc_user WITH PASSWORD 'your_password';"
+psql postgres -c "GRANT ALL PRIVILEGES ON DATABASE vibemc TO vibemc_user;"
 ```
 
-### 2. Set up PostgreSQL
+Update your `.env` with the correct `DATABASE_URL`.
 
-See [POSTGRESQL_SETUP.md](./POSTGRESQL_SETUP.md) for detailed PostgreSQL setup instructions.
+#### Important Environment Variables for Database and Limits
 
-**Quick version:**
+- `DATABASE_URL` — **PostgreSQL connection string.**
+	- Format: `postgresql://<user>:<password>@<host>:<port>/<database>`
+	- Example: `postgresql://vibemc_user:your_password@localhost:5432/vibemc`
+	- This tells the backend how to connect to your PostgreSQL database. Make sure the user, password, host, port, and database name match your setup.
+
+- `DEFAULT_LIMIT` — **Default payload size limit for requests.**
+	- Example: `DEFAULT_LIMIT=10mb`
+	- Controls the maximum size of JSON or form data the backend will accept in requests. Set to a value like `10mb` for most use cases.
+
+- `ATTACHMENT_SIZE_LIMIT_MB` — **Maximum file upload size.**
+	- Example: `ATTACHMENT_SIZE_LIMIT_MB=50mb`
+	- Limits the size of file attachments (uploads) to the backend. Increase if you need to support larger files.
+
+- `RATE_LIMIT_WINDOW_MS` — **Rate limiting window (milliseconds).**
+	- Example: `RATE_LIMIT_WINDOW_MS=60000` (1 minute)
+	- Controls how often rate limits reset. Used to prevent abuse by limiting requests per IP per time window.
+
+- `RATE_LIMIT_MAX` — **Maximum requests per window.**
+	- Example: `RATE_LIMIT_MAX=100`
+	- The maximum number of requests allowed from a single IP in each window (as defined above). Increase for higher traffic, decrease for stricter limits.
+
+> **Tip:** Adjust these values in your `.env` file to match your application's needs and server capacity. After editing, restart the backend to apply changes.
+
+---
+
+### 3. Configure Authentication and GitHub Integration
+
+#### a) Keycloak Authentication (`AUTH_PROVIDER`)
+
+To enable authentication with Keycloak, fill out the following variables in your `.env`:
+
+```
+#AUTH_PROVIDER
+AUTH_ISSUER_URL=https://<your-keycloak-domain>/realms/<realm-name>
+AUTH_PROVIDER=keycloak
+AUTH_CLIENT_ID=<client-id>
+AUTH_CLIENT_SECRET=<client-secret>
+	AUTH_REDIRECT_URI=https://<server>:<port>/api/auth/callback
+AUTH_LOGOUT_ENDPOINT=/protocol/openid-connect/logout
+# Endpoints
+AUTH_TOKEN_ENDPOINT=/protocol/openid-connect/token
+AUTH_USERINFO_ENDPOINT=/protocol/openid-connect/userinfo
+```
+
+**How to configure:**
+
+1. Log in to your Keycloak admin panel.
+2. Create a new Realm (or use an existing one).
+3. Create a new Client (type: confidential) for your backend:
+	- Set the redirect URI to your backend: `https://<your-backend-domain>/api/auth/callback`
+	- Enable "Standard Flow" and "Direct Access Grants".
+	- Copy the Client ID and Secret into your `.env`.
+4. Set `AUTH_ISSUER_URL` to your Keycloak realm URL (e.g., `https://keycloak.example.com/realms/vibe-web`).
+5. The endpoints are usually standard for Keycloak, but adjust if your setup is custom.
+6. Restart the backend after editing `.env`.
+
+> **Note:** If you do not need authentication, you can leave these variables blank or remove them.
+
+#### b) GitHub OAuth Integration
+
+To enable GitHub login or git operations, fill out the following variables in your `.env`:
+
+```
+#Git Configuration
+GITHUB_CLIENT_ID=<your-github-client-id>
+GITHUB_CLIENT_SECRET=<your-github-client-secret>
+	GITHUB_REDIRECT_URI=http://<server>:<port>/api/auth/git/callback
+GIT_TOKEN_ENCRYPTION_KEY=<32-char-random-string>
+```
+
+**How to configure:**
+
+1. Go to https://github.com/settings/developers and create a new OAuth App.
+2. Set the Authorization callback URL to `http://localhost:3001/api/auth/git/callback` (or your deployed backend URL).
+	2. Set the Authorization callback URL to `http://<server>:<port>/api/auth/git/callback` (or your deployed backend URL).
+3. Copy the Client ID and Client Secret into your `.env`.
+4. Set `GIT_TOKEN_ENCRYPTION_KEY` to a secure, random 32-character string (used to encrypt git tokens).
+5. Restart the backend after editing `.env`.
+
+---
+
+### 4. Push Database Schema
+
+This will create all tables in your database:
+
 ```bash
-# Create database
-psql postgres -c "CREATE DATABASE dyad;"
-psql postgres -c "CREATE USER dyad_user WITH PASSWORD 'your_password';"
-psql postgres -c "GRANT ALL PRIVILEGES ON DATABASE dyad TO dyad_user;"
-```
-
-### 3. Configure Environment
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
-```env
-DATABASE_URL=postgresql://dyad_user:your_password@localhost:5432/dyad
-PORT=3001
-CORS_ORIGIN=http://localhost:5173
-DATA_DIR=./data/apps
-```
-
-### 4. Initialize Database
-
-```bash
-# Push schema to PostgreSQL (quickest)
 npm run db:push
+```
 
-# OR generate and run migrations
+If you want to use migrations:
+
+```bash
 npm run db:generate
 npm run db:migrate
 ```
+---
 
-### 5. Start Development Server
-
-```bash
-npm run dev
-```
-
-Server runs at `http://localhost:3001` ✨
-
-## 📡 API Endpoints
-
-### Apps
-- `GET /api/apps` - List all apps
-- `GET /api/apps/:id` - Get app by ID
-- `POST /api/apps` - Create new app
-- `PUT /api/apps/:id` - Update app
-- `DELETE /api/apps/:id` - Delete app
-- `POST /api/apps/:id/favorite` - Toggle favorite
-
-### Chats
-- `GET /api/chats?appId=xxx` - List chats for app
-- `GET /api/chats/:id` - Get chat with messages
-- `POST /api/chats` - Create new chat
-- `DELETE /api/chats/:id` - Delete chat
-- `POST /api/chats/:chatId/messages` - Create message
-- `PUT /api/chats/:chatId/messages/:messageId` - Update message
-
-### Files
-- `GET /api/files/:appId?path=xxx` - List files in app
-- `GET /api/files/:appId/read?path=xxx` - Read file
-- `POST /api/files/:appId/write` - Write file
-- `DELETE /api/files/:appId?path=xxx` - Delete file
-- `POST /api/files/:appId/mkdir` - Create directory
-
-### Git
-- `POST /api/git/:appId/init` - Initialize git repo
-- `POST /api/git/:appId/clone` - Clone repository
-- `POST /api/git/:appId/add` - Stage files
-- `POST /api/git/:appId/commit` - Create commit
-- `GET /api/git/:appId/log` - Get commit history
-- `GET /api/git/:appId/status` - Get git status
-- `POST /api/git/:appId/checkout` - Checkout branch
-
-### Docker
-- `POST /api/apps/:appId/run` - Run app in Docker container
-- `POST /api/apps/:appId/stop` - Stop Docker container
-- `GET /api/apps/:appId/status` - Check if app is running
-- `POST /api/apps/:appId/cleanup` - Remove Docker volumes
-- `GET /api/docker/status` - Get Docker service status
-
-### Streaming
-- `POST /api/stream/chat` - SSE endpoint for AI responses
-- `POST /api/stream/chat/:chatId/cancel` - Cancel active stream
-
-## 🐳 Docker/Podman Integration
-
-The backend supports running generated apps in containers (Docker or Podman), identical to Dyad Desktop.
-
-### Quick Setup
-
-**Basic configuration (.env):**
-```env
-CONTAINERIZATION_ENABLED=true
-CONTAINERIZATION_ENGINE=podman  # or docker
-PODMAN_IMAGE=node:22-bookworm-slim
-CONTAINER_INACTIVITY_TIMEOUT=300000  # 5 minutes
-```
-
-### ⚡ Performance Optimization (Recommended)
-
-For **95% faster container startup** (3-5s instead of 30-40s), build the optimized image:
-
-```bash
-# Build custom image with pre-cached dependencies (one-time, 3-5 min)
-./scripts/build-optimized-image.sh
-
-# Update .env to use optimized image
-PODMAN_IMAGE=dyad-vite-dev:latest
-```
-
-**Performance comparison:**
-- First start: **3-5s** (was 30-40s) ⚡
-- Restart: **2-3s** (was 5-10s) ⚡
-- Zero dependency installation for new apps!
-
-### Documentation
-
-- [Container Startup Optimization](./docs/CONTAINER_STARTUP_OPTIMIZATION.md) - Full optimization guide
-- [Custom Image README](./docs/CUSTOM_IMAGE_README.md) - Pre-cached image details
-- [Quick Start](./docs/CONTAINER_STARTUP_QUICKSTART.md) - Setup and testing
-- [Container Auto-shutdown](./docs/CONTAINER_AUTO_SHUTDOWN.md) - Lifecycle management
-- [Docker Integration](./docs/DOCKER.md) - Detailed Docker/Podman setup
-
-### Test Container System
-```bash
-node test_docker.js
-```
-
-## 🗄️ Database Management
-
-### Drizzle Studio (Visual Editor)
-```bash
-npm run db:studio
-```
-Opens at `https://local.drizzle.studio`
-
-### Migrations
-```bash
-# Generate migration files from schema
-npm run db:generate
-
-# Apply migrations to database
-npm run db:migrate
-
-# Push schema directly (dev only)
-npm run db:push
-```
-
-### Migrate from SQLite
-
-If you have existing SQLite data from the Electron app:
-
-1. Install better-sqlite3 temporarily:
-   ```bash
-   npm install better-sqlite3
-   ```
-
-2. Edit `scripts/migrate-sqlite-to-postgres.ts`:
-   - Update `SQLITE_PATH` to your SQLite database
-   - Adjust field mappings to match your schema
-
-3. Run migration:
-   ```bash
-   npx tsx scripts/migrate-sqlite-to-postgres.ts
-   ```
-
-4. Remove better-sqlite3:
-   ```bash
-   npm uninstall better-sqlite3
-   ```
-
-## 📁 Project Structure
-
-```
-backend/
-├── src/
-│   ├── db/
-│   │   ├── index.ts           # PostgreSQL connection
-│   │   └── schema.ts          # Drizzle schema
-│   ├── routes/
-│   │   ├── app_routes.ts      # App CRUD endpoints
-│   │   ├── chat_routes.ts     # Chat & message endpoints
-│   │   ├── file_routes.ts     # File operations
-│   │   └── git_routes.ts      # Git operations
-│   ├── services/
-│   │   ├── app_service.ts     # App business logic
-│   │   ├── chat_service.ts    # Chat business logic
-│   │   ├── file_service.ts    # File system operations
-│   │   └── git_service.ts     # Git operations
-│   ├── websocket/
-│   │   └── index.ts           # WebSocket server
-│   ├── middleware/
-│   │   └── errorHandler.ts    # Error handling
-│   └── index.ts               # Express app entry
-├── scripts/
-│   └── migrate-sqlite-to-postgres.ts
-├── drizzle.config.ts          # Drizzle Kit config
-├── package.json
-├── tsconfig.json
-├── .env.example
-├── README.md
-└── POSTGRESQL_SETUP.md
-```
-
-## 🔧 Development
-
-### Run Development Server
-```bash
-npm run dev
-```
-Uses `tsx watch` for hot reload
-
-### Build for Production
-```bash
-npm run build
-```
-Outputs to `dist/`
-
-### Run Production Build
-```bash
-npm start
-```
-
-### Type Check
-```bash
-npm run typecheck
-```
-
-## 🔐 Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | **Required** |
-| `PORT` | Server port | `3001` |
-| `NODE_ENV` | Environment | `development` |
-| `CORS_ORIGIN` | Frontend URL for CORS | `http://localhost:5173` |
-| `DATA_DIR` | File storage directory | `./data/apps` |
-
-## ⚠️ Error Handling
-
-All endpoints return errors in this format:
-```json
-{
-  "error": "Error message",
-  "statusCode": 400
-}
-```
-
-Common status codes:
-- `400` - Bad Request (validation errors)
-- `404` - Not Found
-- `500` - Internal Server Error
-
-## 🔒 Security
-
-- ✅ CORS enabled for specified origin
-- ✅ Path traversal protection in file operations
-- ✅ SQL injection protection (Drizzle ORM)
-- ✅ Foreign key constraints for data integrity
-- ⚠️ No authentication yet (add as needed)
-
-## 📝 Migration Notes
-
-### SQLite → PostgreSQL Changes
-
-1. **ID Generation**
-   - Before: Manual UUID generation
-   - After: PostgreSQL `serial` (auto-increment)
-
-2. **Timestamps**
-   - Before: Unix epoch integers
-   - After: PostgreSQL `timestamp` with `Date` objects
-
-3. **Booleans**
-   - Before: Integer (0/1)
-   - After: Native PostgreSQL `boolean`
-
-4. **JSON Data**
-   - Before: TEXT with JSON strings
-   - After: `jsonb` for better querying
-
-5. **Foreign Keys**
-   - Before: No enforcement
-   - After: Enforced with cascading deletes
-
-### Electron IPC → REST API Mapping
-
-| Electron IPC | Backend API |
-|--------------|-------------|
-| `app:list` | `GET /api/apps` |
-| `app:create` | `POST /api/apps` |
-| `chat:stream` | WebSocket event |
-| `file:read` | `GET /api/files/:appId/read` |
-| `git:commit` | `POST /api/git/:appId/commit` |
-
-All business logic from `src/ipc/handlers/*` has been migrated to `src/services/*`.
-
-## 🐛 Troubleshooting
-
-### Cannot connect to PostgreSQL
-- Check if PostgreSQL is running: `brew services list`
-- Verify credentials in `.env`
-- Test connection: `psql -U dyad_user -d dyad`
-
-### Port already in use
-Change `PORT` in `.env` or kill process:
-```bash
-lsof -ti:3001 | xargs kill -9
-```
-
-### Database schema out of sync
-```bash
-npm run db:push
-```
-
-### Drizzle Studio won't open
-Make sure database is accessible and `DATABASE_URL` is correct.
-
-## 🛣️ Roadmap
-
-- ✅ Basic REST API for apps, chats, files, git
-- ✅ WebSocket for real-time communication  
-- ✅ PostgreSQL database with Drizzle ORM
-- ⏳ Implement actual LLM streaming
-- ⏳ Add process management for running apps
-- ⏳ Add settings, providers, MCP routes
-- ⏳ Add authentication (optional)
-- ⏳ Add tests
-- ⏳ Add Docker support
-
-## 📄 License
-
-Same as Dyad main project.
+### 5. Where Are Generated Apps Stored?
+
+When you create a new app from the frontend, the backend stores the generated app files in a directory that depends on your deployment setup and the following environment variables:
+
+#### App Storage Paths
+
+- `APPS_BASE_DIR`: **Path inside the backend container where apps are stored.**
+	- Example: `APPS_BASE_DIR=/app/apps`
+	- This is the directory used by the backend process (especially when running in Docker or another container).
+
+- `HOST_APPS_BASE_DIR`: **Actual path on the host machine (used for volume mounts to child containers).**
+	- Example: `HOST_APPS_BASE_DIR=/Users/hardik.hadvani/Hardik.Hadvani/Projects/Mastercard_POC/github/vibe_backend/apps`
+	- This is the real path on your computer/server where the app folders and files are physically stored.
+
+**How it works:**
+
+- If you run the backend directly (not in Docker), only `APPS_BASE_DIR` matters, and it should be a path accessible to your Node.js process.
+- If you use Docker or Podman, `APPS_BASE_DIR` is the path inside the container, and `HOST_APPS_BASE_DIR` is the path on your host machine. Docker mounts the host path into the container, so files are accessible both inside and outside the container.
+- Each generated app will have its own folder inside this directory, containing all its files and code.
+
+**To change where apps are stored:**
+- Edit `APPS_BASE_DIR` and/or `HOST_APPS_BASE_DIR` in your `.env` file.
+- Restart the backend after making changes.
+
+> For most local development, you can set both to the same absolute path, or use the defaults. For production or containerized deployments, make sure the host and container paths are mapped correctly.
+
+---
+
+### 6. Containerization Configuration Explained
+
+The backend supports running apps either as local Node.js processes or inside containers (Docker/Podman). These environment variables control how containerization works:
+
+- `CONTAINERIZATION_ENABLED` — **Enable or disable containerization.**
+	- `true`: Apps run inside containers (recommended for isolation and security).
+	- `false`: Apps run as local Node.js processes (useful for development or simple setups).
+
+- `DEFAULT_PACKAGE_MANAGER` — **Which package manager to use for generated apps.**
+	- Options: `pnpm`, `npm`, `yarn`
+	- Used if the app does not specify a lock file. Set to your preferred package manager.
+
+- `AUTO_KILL_PORT` — **Automatically stop processes/containers on occupied ports.**
+	- `true`: If a port is already in use, the backend will kill the existing process/container and start the new one.
+	- `false`: If a port is occupied, the backend will return an error and not start the app.
+
+- `CONTAINER_INACTIVITY_TIMEOUT` — **How long (in ms) a container can be idle before being stopped.**
+	- Example: `1600000` (about 26 minutes)
+	- If a containerized app is not used for this period, it will be automatically stopped to save resources.
+
+- `CONTAINER_CPU_LIMIT` — **Maximum number of CPUs a container can use.**
+	- Example: `4` (container can use up to 4 CPUs)
+	- Controls resource allocation for each app container. Lower for lightweight apps, higher for compute-intensive ones.
+
+- `CONTAINER_MEMORY_LIMIT` — **Maximum memory a container can use.**
+	- Example: `1g` (1 gigabyte)
+	- Prevents any single app from consuming too much memory. Increase for larger apps, decrease for tighter control.
+
+> **Tip:** Adjust these settings in your `.env` file based on your server capacity and how you want to manage app isolation and resources. For production, containerization is recommended for security and scalability.
+
+---
+
+## API Endpoints
+
+See the OpenAPI/Swagger docs at `http://localhost:3001/api-docs` after starting the server.
+See the OpenAPI/Swagger docs at `http://<server>:<port>/api-docs` after starting the server.
+
+---
+
+## Troubleshooting
+
+- **Database connection errors:** Check your `DATABASE_URL` and that PostgreSQL is running.
+- **Port already in use:** Change `PORT` in `.env` or stop the conflicting process.
+- **Schema out of sync:** Run `npm run db:push` again.
+
+---
+
+## License
+
+MIT (or same as VibeMC main project)

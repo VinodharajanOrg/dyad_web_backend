@@ -1,357 +1,602 @@
-# Unified Nginx Setup for Dyad Frontend & Backend
+# Vibe Mastercard - AI App Builder Platform
 
-This directory contains a unified nginx configuration that serves both the Dyad frontend (Next.js) and backend (Express) applications through a single reverse proxy with shared SSL certificates.
+A unified, containerized deployment of the Vibe Mastercard AI application platform. This setup includes a Next.js frontend, Express backend, and Nginx reverse proxy, all orchestrated with Docker for easy deployment and management.
+
+## Quick Start with Docker
+
+You can get the entire application stack running in about 5 minutes. Here's how:
+
+```bash
+# 1. Clone the repository
+git clone <repository-url>
+cd github
+
+# 2. Set your server IP address (use your actual server IP)
+export SERVER_IP="10.157.150.207"  # Replace with your server IP
+
+# 3. Generate SSL certificates
+mkdir -p ssl
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout ssl/key.pem -out ssl/cert.pem \
+  -subj "/C=US/ST=State/L=City/O=Mastercard/CN=${SERVER_IP}"
+
+# Set proper permissions for SSL certificates
+chmod 600 ssl/key.pem
+chmod 644 ssl/cert.pem
+
+# 4. Configure environment files
+cp vibe_backend/env.example vibe_backend/.env
+cp vibe_frontend/env.local vibe_frontend/.env.local
+
+# Edit .env files and replace localhost with your SERVER_IP
+sed -i.bak "s/localhost/${SERVER_IP}/g" vibe_backend/.env
+sed -i.bak "s/localhost/${SERVER_IP}/g" vibe_frontend/.env.local
+
+# 5. Start all services with Docker Compose
+docker-compose up -d
+
+# 6. Access the application
+# Frontend: https://${SERVER_IP}
+# API Docs: https://${SERVER_IP}/api-docs
+```
+
+The application should now be running and accessible.
 
 ## Architecture
 
 ```
-                                    ┌─────────────────┐
-                                    │   Nginx Proxy   │
-                                    │   Port 80/443   │
-                                    └────────┬────────┘
-                                            │
-                        ┌───────────────────┴───────────────────┐
-                        │                                       │
-                   ┌────▼─────┐                          ┌─────▼────┐
-                   │ Frontend │                          │ Backend  │
-                   │ Next.js  │                          │ Express  │
-                   │ Port 3000│                          │ Port 3001│
-                   └──────────┘                          └──────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                          Client Browser                      │
+│                 (https://<SERVER_IP>:443)                    │
+└───────────────────────────┬──────────────────────────────────┘
+                            │
+                            │ HTTPS (SSL/TLS)
+                            │
+┌───────────────────────────▼──────────────────────────────────┐
+│                      Nginx Reverse Proxy                     │
+│                        (Port 80/443)                         │
+│                                                              │
+│  Routes:                                                     │
+│  ┌──────────────────────────────────────────────────┐        │
+│  │ /          → Frontend (Next.js)                  │        │
+│  │ /api/*     → Backend (Express)                   │        │
+│  │ /api-docs  → Swagger API Documentation           │        │
+│  │ /health    → Health Check Endpoint               │        │
+│  └──────────────────────────────────────────────────┘        │
+└───────────────────┬────────────────────┬─────────────────────┘
+                    │                    │
+        ┌───────────┘                    └───────────┐
+        │                                            │
+┌───────▼─────────┐                        ┌─────────▼──────────┐
+│  Frontend       │                        │  Backend           │
+│  Container      │                        │  Container         │
+│  Next.js:3000   │                        │  Express:3001      │
+│                 │                        │                    │
+│  • React UI     │                        │  • REST API        │
+│  • SSR/SSG      │                        │  • Docker Engine   │
+│  • Keycloak Auth│                        │  • Container Mgmt  │
+│  • Responsive   │                        │  • PostgreSQL      │
+└─────────────────┘                        └────────────────────┘
+                                           
 ```
 
-## Directory Structure
+### Component Overview
 
-```
-github/
-├── docker-compose.yml          # Unified docker compose for all services
-├── ssl/                        # Common SSL certificates directory
-│   ├── cert.pem
-│   └── key.pem
-├── nginx/
-│   └── nginx.conf             # Unified nginx configuration
-├── logs/
-│   └── nginx/                 # Nginx access and error logs
-├── dyad_web_backend/          # Backend application
-└── dyad-web/                  # Frontend application
-```
+| Component | Technology | Port | Purpose |
+|-----------|-----------|------|---------|
+| **Nginx** | Nginx Alpine | 80, 443 | Reverse proxy, SSL termination, routing |
+| **Frontend** | Next.js 15 | 3000 | React-based UI application |
+| **Backend** | Express + Node.js 20 | 3001 | REST API, WebSocket, container orchestration |
+| **Database** | PostgreSQL | 5432 | Application data storage |
+| **Auth** | Keycloak | External | Identity and access management |
 
-## Features
+## Prerequisites
 
-### Unified Routing
-- **Frontend**: `https://localhost/` - Serves the Next.js application
-- **Backend API**: `https://localhost/api/*` - Proxies to backend Express API
-- **API Docs**: `https://localhost/api-docs` - Swagger documentation
-- **Container Previews**: `https://localhost/app/preview/:id` - Container preview endpoints
-- **Health Check**: `https://localhost/health` - System health status
+### Required Software
 
-### Security Features
-- ✅ Automatic HTTP to HTTPS redirect
-- ✅ SSL/TLS 1.2 and 1.3 support
-- ✅ Strong cipher configuration
-- ✅ Security headers (HSTS, X-Frame-Options, CSP, etc.)
-- ✅ Rate limiting for API endpoints
-- ✅ Shared SSL certificate management
+- **Docker**: Version 20.10+
+- **Docker Compose**: Version 2.0+ (included with Docker Desktop)
+- **Git**: For cloning the repository
 
-### Performance Optimization
-- ✅ Gzip compression for all text-based content
-- ✅ Static asset caching for Next.js files
-- ✅ HTTP/2 support
-- ✅ Connection keepalive
-- ✅ Optimized buffer sizes
+### Network Ports
 
-### WebSocket Support
-- ✅ WebSocket connections for real-time features
-- ✅ Hot Module Replacement (HMR) for development
-- ✅ Server-Sent Events (SSE) for streaming
+Ensure these ports are available:
+- `80` - HTTP (redirects to HTTPS)
+- `443` - HTTPS
+- `3000` - Frontend (internal)
+- `3001` - Backend (internal)
 
-## Quick Start
+## Docker Deployment
 
-### 1. Setup SSL Certificates
+### Complete Setup Guide
 
-Generate self-signed certificates for development:
+#### Step 1: Generate SSL Certificates
 
 ```bash
+# Create SSL directory
+mkdir -p ssl
+
+# Set your server IP
+export SERVER_IP="10.157.150.207"  # Replace with your actual server IP
+
+# Generate self-signed certificates (for development)
 cd ssl
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -keyout key.pem -out cert.pem \
-  -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
+  -subj "/C=US/ST=State/L=City/O=Mastercard/CN=${SERVER_IP}"
+
+# Set proper permissions for SSL certificates
+chmod 600 key.pem
+chmod 644 cert.pem
+cd ..
 ```
 
-Or copy existing certificates:
+#### Step 2: Configure Environment Variables
+
+**Backend Configuration** (`vibe_backend/.env`):
 
 ```bash
-# Copy from backend SSL directory
-cp dyad_web_backend/ssl/cert.pem ssl/
-cp dyad_web_backend/ssl/key.pem ssl/
+# Copy example file
+cp vibe_backend/env.example vibe_backend/.env
 
-# Or from frontend SSL directory
-cp dyad-web/nginx/ssl/cert.pem ssl/
-cp dyad-web/nginx/ssl/key.pem ssl/
+# Edit configuration
+nano vibe_backend/.env
 ```
 
-### 2. Configure Environment Variables
-
-Create environment files if they don't exist:
-
-**Backend (.env in dyad_web_backend/):**
+Key configurations (replace `<SERVER_IP>` with your actual server IP):
 ```env
-NODE_ENV=production
+# Server
 PORT=3001
-DATABASE_URL=postgresql://user:password@your-db-host:5432/dyad
-USE_HTTPS=true
-SSL_KEY_PATH=/app/ssl/key.pem
-SSL_CERT_PATH=/app/ssl/cert.pem
-# Add other backend environment variables as needed
-```
-
-**Frontend (env.local in dyad-web/):**
-```env
 NODE_ENV=production
-NEXT_PUBLIC_API_URL=https://localhost/api
-# Add other frontend environment variables as needed
-NODE_TLS_REJECT_UNAUTHORIZED=0
+USE_HTTPS=false  # Nginx handles SSL
+
+# Database
+DATABASE_URL=postgresql://user:password@host.docker.internal:5432/vibe-db
+
+# Authentication (Keycloak)
+AUTH_PROVIDER=keycloak
+AUTH_ISSUER_URL=https://10.157.147.235/realms/vibe-web
+AUTH_CLIENT_ID=vibe-backend
+AUTH_CLIENT_SECRET=your-client-secret
+AUTH_REDIRECT_URI=https://<SERVER_IP>/api/auth/callback
+
+# Frontend URL
+FRONTEND_URL=https://<SERVER_IP>
+
+# Containerization
+CONTAINERIZATION_ENABLED=true
+CONTAINERIZATION_ENGINE=docker
+DOCKER_NETWORK=vibe-network
+
+# GitHub OAuth Configuration (for Git integration)
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+GITHUB_REDIRECT_URI=https://<SERVER_IP>/api/auth/git/callback
+GIT_TOKEN_ENCRYPTION_KEY=your-32-character-encryption-key
 ```
 
-### 3. Start All Services
-
-From the root directory (`github/`):
+**Frontend Configuration** (`vibe_frontend/.env.local`):
 
 ```bash
-# Build and start all services
+# Copy example file
+cp vibe_frontend/env.local vibe_frontend/.env.local
+
+# Edit configuration
+nano vibe_frontend/.env.local
+```
+
+Key configurations (replace `<SERVER_IP>` with your actual server IP):
+```env
+# API Configuration
+NEXT_PUBLIC_API_URL=https://<SERVER_IP>/api
+NEXT_PUBLIC_WS_URL=wss://<SERVER_IP>/api
+
+# Keycloak
+NEXT_PUBLIC_KEYCLOAK_URL=https://10.157.147.235
+NEXT_PUBLIC_KEYCLOAK_REALM=vibe-web
+NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=vibe-mastercard-frontend
+
+# Features
+NEXT_PUBLIC_ENABLE_AUTH=true
+```
+
+#### Step 3: Build and Start Services
+
+```bash
+# Build all containers
+docker-compose build
+
+# Start in detached mode
 docker-compose up -d
+
+# Or start with logs visible
+docker-compose up
+```
+
+#### Step 4: Verify Deployment
+
+```bash
+# Check container status
+docker-compose ps
+
+# Check health endpoints (replace <SERVER_IP> with your actual IP)
+curl -k https://<SERVER_IP>/health
+curl -k https://<SERVER_IP>/api/health
 
 # View logs
 docker-compose logs -f
+```
 
-# Check service status
+### Docker Compose Services
+
+The `docker-compose.yml` defines three main services:
+
+```yaml
+services:
+  backend:      # Express API server
+  frontend:     # Next.js application
+  nginx:        # Reverse proxy
+```
+
+All services are connected via the `vibe-network` bridge network.
+
+## Configuration
+
+### Environment Files
+
+| File | Purpose | Required |
+|------|---------|----------|
+| `vibe_backend/.env` | Backend configuration | Yes |
+| `vibe_frontend/.env.local` | Frontend configuration | Yes |
+| `nginx/nginx.conf` | Nginx routing rules | Yes (auto-created) |
+
+### SSL Certificates
+
+Place certificates in the `ssl/` directory:
+- `ssl/cert.pem` - SSL certificate
+- `ssl/key.pem` - Private key
+
+All services share these certificates via Docker volumes.
+
+### Database Setup
+
+The backend requires PostgreSQL. Options:
+
+1. **External Database** (Recommended for production):
+   ```env
+   DATABASE_URL=postgresql://user:pass@remote-host:5432/vibe-db
+   ```
+
+2. **Local Docker Database**:
+   ```env
+   DATABASE_URL=postgresql://user:pass@host.docker.internal:5432/vibe-db
+   ```
+
+Run migrations after first setup:
+```bash
+docker-compose exec backend npm run migrate
+```
+
+### AI Provider Configuration
+
+Configure AI providers through the UI or environment variables:
+
+```env
+# OpenAI
+OPENAI_API_KEY=sk-...
+
+# Anthropic (Claude)
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Google Gemini
+GOOGLE_GENERATIVE_AI_API_KEY=...
+
+# Azure Foundry
+AZURE_FOUNDRY_API_KEY=...
+CUSTOM_API_ENDPOINT=https://...
+```
+
+See [AI_PROVIDER_CONFIGURATION.md](./AI_PROVIDER_CONFIGURATION.md) for detailed setup.
+
+### GitHub Integration Configuration
+
+The platform supports GitHub OAuth for repository integration. To enable this feature:
+
+1. **Create a GitHub OAuth App:**
+   - Go to GitHub Settings → Developer settings → OAuth Apps
+   - Click "New OAuth App"
+   - Set Application name: `Vibe Mastercard`
+   - Set Homepage URL: `https://<SERVER_IP>`
+   - Set Authorization callback URL: `https://<SERVER_IP>/api/auth/git/callback`
+   - Note the Client ID and generate a Client Secret
+
+2. **Configure Backend Environment Variables:**
+   ```env
+   GITHUB_CLIENT_ID=your-github-client-id
+   GITHUB_CLIENT_SECRET=your-github-client-secret
+   GITHUB_REDIRECT_URI=https://<SERVER_IP>/api/auth/git/callback
+   GIT_TOKEN_ENCRYPTION_KEY=your-32-character-encryption-key
+   ```
+
+3. **Generate Encryption Key:**
+   ```bash
+   # Generate a secure 32-character key
+   openssl rand -base64 32 | head -c 32
+   ```
+
+This enables users to authenticate with GitHub and access their repositories within the platform.
+
+## Management
+
+### Docker Compose Commands
+
+```bash
+# View running containers
 docker-compose ps
-```
 
-### 4. Access the Application
-
-- **Frontend**: https://localhost
-- **Backend API**: https://localhost/api
-- **API Documentation**: https://localhost/api-docs
-- **Health Check**: https://localhost/health
-
-## Service Management
-
-### Start Services
-```bash
-docker-compose up -d
-```
-
-### Stop Services
-```bash
-docker-compose down
-```
-
-### Restart Nginx Only
-```bash
-docker-compose restart nginx
-```
-
-### View Logs
-```bash
-# All services
+# View logs (follow mode)
 docker-compose logs -f
 
-# Specific service
-docker-compose logs -f nginx
+# View specific service logs
 docker-compose logs -f backend
 docker-compose logs -f frontend
-```
 
-### Rebuild Services
-```bash
-# Rebuild all
-docker-compose up -d --build
+# Stop services
+docker-compose down
+
+# Stop and remove volumes
+docker-compose down -v
+
+# Restart a specific service
+docker-compose restart backend
+
+# Execute command in container
+docker-compose exec backend npm run migrate
+docker-compose exec backend sh
 
 # Rebuild specific service
-docker-compose up -d --build backend
+docker-compose build --no-cache backend
+
+# Scale services (if configured)
+docker-compose up -d --scale backend=2
 ```
 
-## Configuration Details
+### Health Checks
 
-### Rate Limiting
+All services have built-in health checks:
 
-The nginx configuration includes rate limiting to protect your services:
-
-- **API endpoints** (`/api/*`): 10 requests/second with burst of 20
-- **Container previews** (`/app/preview/*`): 30 requests/second with burst of 50
-- **General traffic** (`/*`): 50 requests/second with burst of 100
-
-### SSL Configuration
-
-The unified setup uses a common SSL directory (`ssl/`) mounted to all services:
-- Nginx: `/etc/nginx/ssl`
-- Backend: `/app/ssl`
-- Frontend: `/app/ssl`
-
-This ensures all services use the same certificates, simplifying management.
-
-### Logging
-
-Nginx logs are stored in `logs/nginx/`:
-- `access.log` - All HTTP requests
-- `error.log` - Errors and warnings
-
-## Production Deployment
-
-### Using Let's Encrypt
-
-For production, use Let's Encrypt for free SSL certificates:
-
-1. Uncomment the `certbot` service in `docker-compose.yml`
-
-2. Update the nginx configuration to use Let's Encrypt certificates:
-```nginx
-ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
-ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
-```
-
-3. Obtain certificates:
 ```bash
-docker-compose run --rm certbot certonly \
-  --webroot \
-  --webroot-path=/var/www/certbot \
-  -d yourdomain.com \
-  -d www.yourdomain.com
+# Replace <SERVER_IP> with your actual server IP
+
+# Nginx health
+curl -k https://<SERVER_IP>/health
+
+# Backend health
+curl -k https://<SERVER_IP>/api/health
+
+# Frontend health (internal)
+docker-compose exec frontend wget -q -O- http://localhost:3000/api/health
 ```
 
-### Security Checklist
+## Documentation
 
-- [ ] Replace self-signed certificates with valid SSL certificates
-- [ ] Update `server_name` in nginx.conf with your domain
-- [ ] Set strong database passwords
-- [ ] Enable firewall rules (allow only 80, 443)
-- [ ] Set `NODE_TLS_REJECT_UNAUTHORIZED=1` in production
-- [ ] Review and adjust rate limiting thresholds
-- [ ] Configure proper CORS settings in backend
-- [ ] Enable nginx access log rotation
-- [ ] Set up monitoring and alerts
+- **[DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)** - Production deployment guide
+- **[KEYCLOAK_SETUP.md](./KEYCLOAK_SETUP.md)** - Keycloak authentication setup
+- **[AI_PROVIDER_CONFIGURATION.md](./AI_PROVIDER_CONFIGURATION.md)** - AI provider configuration
+
+### Component Documentation
+
+- **[vibe_backend/README.md](./vibe_backend/README.md)** - Backend API documentation
+- **[vibe_frontend/README.md](./vibe_frontend/README.md)** - Frontend application documentation
+
 
 ## Troubleshooting
 
-### Port Conflicts
+### Common Issues
 
-If you get port binding errors:
+#### Services Won't Start
+
 ```bash
-# Check what's using the port
+# Check logs
+docker-compose logs
+
+# Check port conflicts
 sudo lsof -i :80
 sudo lsof -i :443
+sudo lsof -i :3000
+sudo lsof -i :3001
 
-# Stop other nginx instances
-sudo systemctl stop nginx
-
-# Or change ports in docker-compose.yml
-ports:
-  - "8080:80"   # Changed from 80:80
-  - "8443:443"  # Changed from 443:443
-```
-
-### SSL Certificate Errors
-
-If browsers show certificate warnings:
-- **Development**: This is normal with self-signed certificates. Click "Advanced" and "Proceed to localhost"
-- **Production**: Ensure you're using valid certificates from a trusted CA
-
-### Service Connection Issues
-
-Check if all services are healthy:
-```bash
-docker-compose ps
-docker-compose logs backend
-docker-compose logs frontend
-```
-
-Test endpoints individually:
-```bash
-# Test backend directly
-curl http://localhost:3001/health
-
-# Test frontend directly
-curl http://localhost:3000
-
-# Test through nginx
-curl -k https://localhost/health
-curl -k https://localhost/api/health
-```
-
-### Nginx Configuration Syntax
-
-Test nginx configuration before restarting:
-```bash
-docker-compose exec nginx nginx -t
-```
-
-Reload nginx without downtime:
-```bash
-docker-compose exec nginx nginx -s reload
-```
-
-## Migration from Separate Nginx Instances
-
-If you're migrating from the separate nginx setups:
-
-1. **Backup existing configurations**:
-```bash
-cp dyad_web_backend/nginx/nginx.conf dyad_web_backend/nginx/nginx.conf.backup
-cp dyad-web/nginx/nginx.conf dyad-web/nginx/nginx.conf.backup
-```
-
-2. **Stop old services**:
-```bash
-cd dyad_web_backend/nginx && docker-compose down
-cd dyad-web && docker-compose down
-```
-
-3. **Use the unified setup**:
-```bash
-cd github/
+# Rebuild containers
+docker-compose down
+docker-compose build --no-cache
 docker-compose up -d
 ```
 
-## Performance Tuning
+#### 502 Bad Gateway
 
-### For High Traffic
+This means backend/frontend isn't ready:
 
-Adjust these values in `nginx/nginx.conf`:
+```bash
+# Check service health
+docker-compose ps
 
-```nginx
-worker_processes auto;  # Or specific number based on CPU cores
-worker_connections 2048;  # Increase from 1024
+# Wait for all services to be healthy
+docker-compose logs -f backend
+docker-compose logs -f frontend
 
-# Adjust rate limits
-limit_req_zone $binary_remote_addr zone=api_limit:10m rate=50r/s;
+# Check backend directly
+curl http://localhost:3001/health
 ```
 
-### For Large File Uploads
+#### SSL Certificate Errors
 
-```nginx
-client_max_body_size 500M;  # Default is 100M
+```bash
+# Verify certificates exist
+ls -la ssl/
+
+# Regenerate certificates (replace with your server IP)
+export SERVER_IP="10.157.150.207"
+cd ssl
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout key.pem -out cert.pem \
+  -subj "/C=US/ST=State/L=City/O=Mastercard/CN=${SERVER_IP}"
+
+# Set proper permissions
+chmod 600 key.pem
+chmod 644 cert.pem
+cd ..
+
+# Restart nginx
+docker-compose restart nginx
 ```
 
-### Connection Pooling
+#### Database Connection Failed
 
-```nginx
-upstream backend_api {
-    server backend:3001;
-    keepalive 64;  # Increase from 32
-}
+```bash
+# Check DATABASE_URL
+docker-compose exec backend env | grep DATABASE_URL
+
+# Test database connectivity
+docker-compose exec backend psql $DATABASE_URL
+
+# For host.docker.internal issues on Linux:
+# Add to docker-compose.yml under backend service:
+extra_hosts:
+  - "host.docker.internal:host-gateway"
 ```
 
-## Support
+#### Container Build Fails
 
-For issues or questions:
-1. Check the logs: `docker-compose logs -f`
-2. Verify all services are healthy: `docker-compose ps`
-3. Test the health endpoint: `curl -k https://localhost/health`
-4. Review nginx error logs: `tail -f logs/nginx/error.log`
+```bash
+# Clear Docker cache
+docker system prune -a
 
-## Related Documentation
+# Remove all containers and volumes
+docker-compose down -v
 
-- [Backend Architecture](dyad_web_backend/docs/ARCHITECTURE.md)
-- [Docker Setup](dyad_web_backend/docs/DOCKER_QUICK_START_GUIDE.md)
-- [API Documentation](dyad_web_backend/docs/API_DOCUMENTATION.md)
-- [Frontend Setup](dyad-web/README.md)
+# Rebuild from scratch
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+#### Port Already in Use
+
+```bash
+# Find process using port
+sudo lsof -i :443
+sudo lsof -i :80
+
+# Kill process (example)
+sudo kill -9 <PID>
+
+# Or change ports in docker-compose.yml
+ports:
+  - "8080:80"
+  - "8443:443"
+```
+
+### Debug Mode
+
+Enable verbose logging:
+
+```bash
+# Backend debug logs
+# Edit vibe_backend/.env
+LOG_LEVEL=debug
+LOG_FORMAT=console
+
+# Restart services
+docker-compose restart backend
+
+# View debug logs
+docker-compose logs -f backend
+```
+
+### Getting Help
+
+1. **Check logs first**: `docker-compose logs -f`
+2. **Review documentation**: See files above
+3. **Check service health**: `docker-compose ps` and health endpoints
+4. **Verify configuration**: Ensure .env files are correct
+5. **Network connectivity**: Test connections between services
+
+## Access URLs
+
+After successful deployment (replace `<SERVER_IP>` with your actual server IP):
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| **Frontend** | https://&lt;SERVER_IP&gt; | Main application UI |
+| **Backend API** | https://&lt;SERVER_IP&gt;/api | REST API endpoints |
+| **API Documentation** | https://&lt;SERVER_IP&gt;/api-docs | Swagger/OpenAPI docs |
+| **Health Check** | https://&lt;SERVER_IP&gt;/health | System health status |
+| **Keycloak** | https://10.157.147.235 | Authentication server |
+
+**Example for server at 10.157.150.207:**
+- Frontend: https://10.157.150.207
+- API: https://10.157.150.207/api
+- API Docs: https://10.157.150.207/api-docs
+
+## Monitoring
+
+### Service Status
+
+```bash
+# Check container status
+docker-compose ps
+
+# Detailed container info
+docker stats
+```
+
+### Logs
+
+```bash
+# Stream all logs
+docker-compose logs -f
+
+# Last 100 lines
+docker-compose logs --tail=100
+
+# Logs since timestamp
+docker-compose logs --since 2026-01-20T10:00:00
+```
+
+### Metrics
+
+Access metrics endpoints:
+- Backend: `https://localhost/api/health`
+- Nginx: Check `logs/nginx/access.log`
+
+## Updates and Maintenance
+
+### Update Application
+
+```bash
+# Pull latest changes
+git pull origin main
+
+# Rebuild and restart
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+
+# Run migrations if needed
+docker-compose exec backend npm run migrate
+```
+
+### Backup
+
+```bash
+# Backup database
+pg_dump $DATABASE_URL > backup_$(date +%Y%m%d).sql
+
+# Backup configuration
+tar -czf config_backup_$(date +%Y%m%d).tar.gz \
+  vibe_backend/.env \
+  vibe_frontend/.env.local \
+  ssl/
+
+# Backup application data
+tar -czf data_backup_$(date +%Y%m%d).tar.gz vibe_backend/apps/
+```
