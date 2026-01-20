@@ -8,15 +8,15 @@ Below are the data we need in `.env` file:
 
 ```
 KEYCLOAK_URL=http://localhost:8080/
-KEYCLOAK_REALM=dyad-web
-KEYCLOAK_CLIENT_ID=dyad-backend
+KEYCLOAK_REALM=vibe-web
+KEYCLOAK_CLIENT_ID=vibe-backend
 KEYCLOAK_CLIENT_SECRET=2FHnvEuukzI2txq3HV2LxCtE4aiyyIpU
 KEYCLOAK_REDIRECT_URI=http://localhost:3001/api/auth/callback
 ```
 
 ## Step 2: Create Realm
 
-To create a realm (KEYCLOAK_REALM=dyad-web), click on **Create Realm** in the UI.
+To create a realm (KEYCLOAK_REALM=vibe-web), click on **Create Realm** in the UI.
 
 ![Screenshot 2.1](./docs/images/keycloak_screenshot/Screenshot2.1.png)
 
