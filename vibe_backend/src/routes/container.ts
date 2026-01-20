@@ -65,7 +65,7 @@ const localRunner = LocalRunnerService.getInstance();
  *                       example: '1'
  *                     containerName:
  *                       type: string
- *                       example: dyad-app-1
+ *                       example: vibe-app-1
  *                     port:
  *                       type: integer
  *                       example: 32100
@@ -142,7 +142,7 @@ router.post('/:appId/run',requireAuth,validate(appIdField, 'params'), async (req
         message: `App ${appId} is already running`,
         data: {
           appId,
-          containerName: status.containerName || `dyad-app-${appId}`,
+          containerName: status.containerName || `vibe-app-${appId}`,
           port: containerPort,
           url: containerUrl,
         },
@@ -209,7 +209,7 @@ router.post('/:appId/run',requireAuth,validate(appIdField, 'params'), async (req
         message: `App ${appId} started in container`,
         data: {
           appId,
-          containerName: status.containerName || `dyad-app-${appId}`,
+          containerName: status.containerName || `vibe-app-${appId}`,
           port: containerPort,
           url: containerUrl,
         },

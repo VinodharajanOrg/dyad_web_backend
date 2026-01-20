@@ -8,11 +8,54 @@ import http from 'node:http';
 const router = Router();
 
 /**
- * Container preview proxy route
- * Proxies requests to running containers on their allocated ports
- * 
- * GET /app/preview/:appId
- * GET /app/preview/:appId/*
+ * @swagger
+ * /app/preview/{appId}/{path}:
+ *   get:
+ *     tags: [Preview]
+ *     summary: Preview application container
+ *     description: >
+ *       Proxies requests to a running application container. If the container is not running, 
+ *       it will be automatically started. This endpoint acts as a reverse proxy to access 
+ *       the application running inside a Docker container.
+ *     parameters:
+ *       - in: path
+ *         name: appId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Application ID to preview
+ *       - in: path
+ *         name: path
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Path to proxy to the container (e.g., /api/users, /assets/style.css)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully proxied to container
+ *         content:
+ *           text/html:
+ *             schema:
+ *               type: string
+ *           application/json:
+ *             schema:
+ *               type: object
+ *       404:
+ *         description: Container or app not found
+ *       500:
+ *         description: Failed to start or proxy to container
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: Failed to start container
+ *                 details:
+ *                   type: string
  */
 
 // Handle all preview requests with optional path
@@ -84,7 +127,7 @@ router.get('/app/preview/:appId/:path(*)?', async (req: Request, res: Response, 
 
     // Create proxy request
     const forwardHeaders: http.OutgoingHttpHeaders = {
-      'user-agent': req.headers['user-agent'] || 'DyadPreviewProxy/1.0',
+      'user-agent': req.headers['user-agent'] || 'VibePreviewProxy/1.0',
       'accept': req.headers['accept'] || '*/*',
       'accept-language': req.headers['accept-language'] || 'en-US,en;q=0.9',
       'host': targetUrl.host,
@@ -215,7 +258,43 @@ router.get('/app/preview/:appId/:path(*)?', async (req: Request, res: Response, 
 });
 
 /**
- * Root preview endpoint - returns info about preview service
+ * @swagger
+ * /api/app/preview:
+ *   get:
+ *     tags: [Preview]
+ *     summary: Get preview service information
+ *     description: Returns metadata about the container preview proxy service including usage examples and port range
+ *     responses:
+ *       200:
+ *         description: Preview service information
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 service:
+ *                   type: string
+ *                   example: Container Preview Proxy
+ *                 version:
+ *                   type: string
+ *                   example: 1.0.0
+ *                 usage:
+ *                   type: string
+ *                   example: /app/preview/:appId/[path]
+ *                 examples:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   example: ['/app/preview/1/', '/app/preview/2/index.html', '/app/preview/3/assets/logo.png']
+ *                 portRange:
+ *                   type: object
+ *                   properties:
+ *                     min:
+ *                       type: integer
+ *                       example: 32100
+ *                     max:
+ *                       type: integer
+ *                       example: 32200
  */
 router.get('/app/preview', (req: Request, res: Response) => {
   res.json({

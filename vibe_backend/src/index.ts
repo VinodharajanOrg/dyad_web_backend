@@ -135,7 +135,7 @@ app.get('/health', (req, res) => {
 
 // Swagger API Documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  customSiteTitle: 'Dyad API Documentation',
+  customSiteTitle: 'Vibe Mastercard API Documentation',
   customCss: '.swagger-ui .topbar { display: none }',
 }));
 
@@ -189,7 +189,7 @@ async function startServer() {
     // Start HTTP/HTTPS server
     const protocol = process.env.USE_HTTPS === 'true' ? 'https' : 'http';
     server.listen(PORT, () => {
-      logger.info('Dyad Backend Server Started', {
+      logger.info('Vibe Mastercard Backend Server Started', {
         service: protocol,
         port: PORT,
         protocol,

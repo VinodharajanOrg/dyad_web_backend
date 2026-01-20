@@ -6,7 +6,20 @@ import { logger } from "../utils/logger";
 import { getCookieOptions, getClearCookieOptions } from "../config/cookie.config";
 const router = express.Router();
 
-//redirect logind:\work\POC\dyad\backend\src\routes\auth.ts
+/**
+ * @swagger
+ * /api/auth/login:
+ *   get:
+ *     tags: [Auth]
+ *     summary: Initiate Keycloak login
+ *     description: Redirects user to Keycloak login page for authentication
+ *     responses:
+ *       302:
+ *         description: Redirect to Keycloak login
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+//redirect login
 router.get("/login", (req, res) => {
   try {
     const url = authService.getLoginUrl();
@@ -18,6 +31,32 @@ router.get("/login", (req, res) => {
     return res.status(500).json({ error: 'Failed to generate login URL', message: error.message });
   }
 });
+
+/**
+ * @swagger
+ * /api/auth/callback:
+ *   get:
+ *     tags: [Auth]
+ *     summary: Handle Keycloak OAuth callback
+ *     description: Processes Keycloak authentication callback, exchanges code for tokens, and sets authentication cookies
+ *     parameters:
+ *       - in: query
+ *         name: code
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: OAuth authorization code from Keycloak
+ *     responses:
+ *       302:
+ *         description: Redirect to frontend with authentication cookies set
+ *         headers:
+ *           Set-Cookie:
+ *             schema:
+ *               type: string
+ *             description: Authentication cookies (user_id, username, email, accessToken, refreshToken, expiresAt)
+ *       500:
+ *         description: Authentication failed
+ */
 //callback
 router.get("/callback", async (req: any, res) => {
   try {
@@ -188,6 +227,19 @@ router.get("/callback", async (req: any, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   get:
+ *     tags: [Auth]
+ *     summary: Logout user
+ *     description: Clears all authentication cookies and redirects to frontend
+ *     responses:
+ *       302:
+ *         description: Redirect to frontend after clearing cookies
+ *       500:
+ *         description: Logout failed
+ */
 router.get("/logout", (req, res) => {
   try {
     logger.info('Logout requested', {
@@ -224,6 +276,48 @@ router.get("/logout", (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/auth/refreshToken:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Refresh access token
+ *     description: Exchanges refresh token for new access and refresh tokens
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - refreshToken
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *                 description: Valid refresh token
+ *                 example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *     responses:
+ *       200:
+ *         description: New tokens generated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     access_token:
+ *                       type: string
+ *                     refresh_token:
+ *                       type: string
+ *                     expires_in:
+ *                       type: integer
+ *       400:
+ *         description: Refresh token missing
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 router.post("/refreshToken", async (req, res) => {
   try {
     const { refreshToken } = req.body;
@@ -268,6 +362,35 @@ router.post("/refreshToken", async (req, res) => {
     return res.status(500).json({ error: "Failed to refresh token" });
   }
 });
+
+/**
+ * @swagger
+ * /api/auth/userinfo:
+ *   get:
+ *     tags: [Auth]
+ *     summary: Get current user information
+ *     description: Retrieves authenticated user details from Keycloak
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: User information retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   $ref: '#/components/schemas/AuthUser'
+ *                 roles:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *       401:
+ *         description: Access token required
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
 //user info
 router.get("/userinfo", requireAuth, async (req: any, res) => {
   try {

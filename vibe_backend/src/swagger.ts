@@ -4,29 +4,25 @@ const options: swaggerJsdoc.Options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'Dyad Backend API',
+      title: 'Vibe Mastercard Backend API',
       version: '1.0.0',
-      description: `REST API for Dyad - AI-powered application development platform
+      description: `REST API for Vibe Mastercard - AI-powered application development platform
       
 **Features:**
-- App management (create, update, delete applications)
-- Chat & message management with AI streaming
-- Container orchestration (Docker/Podman/Tanzu/Kubernetes) for running apps
-- File operations (read, write, delete)
-- Git operations (init, clone, commit, push)
-- User settings & AI model configuration
-- Real-time streaming via Server-Sent Events (SSE)
-
-**Documentation:**
-- Full API docs: [API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
-- Container integration: [CONTAINER.md](./CONTAINER.md)`,
+- Application Management: Create, update, and manage AI-generated applications
+- Chat & AI Integration: Real-time chat with AI models including Anthropic Claude, OpenAI, and Google Gemini
+- Container Orchestration: Docker-based container management for running applications
+- File Operations: Secure file system operations scoped to application directories
+- Git Integration: Complete version control workflow (init, clone, commit, push, branch management)
+- User Settings: AI model configuration, API key management, and feature preferences
+- Real-time Streaming: Server-Sent Events (SSE) for AI responses and container events
+- GitHub OAuth: Repository access and integration
+- Keycloak Authentication: Enterprise-grade single sign-on`,
       contact: {
-        name: 'Dyad Team',
-        url: 'https://github.com/dyad-sh/dyad',
+        name: 'Vibe Mastercard Team',
       },
       license: {
-        name: 'MIT',
-        url: 'https://github.com/dyad-sh/dyad/blob/main/LICENSE',
+        name: 'Apache 2.0',
       },
     },
     servers: [
@@ -41,28 +37,44 @@ const options: swaggerJsdoc.Options = {
         description: 'Application management - Create, read, update, delete applications with template scaffolding support',
       },
       { 
+        name: 'Auth', 
+        description: 'Authentication and authorization - Keycloak integration, GitHub OAuth, login, logout, and token management',
+      },
+      { 
         name: 'Chats', 
         description: 'Chat and message management - Manage conversations, messages, and AI chat history',
       },
       { 
         name: 'Container', 
-        description: 'Container orchestration - Docker/Podman/Kubernetes container lifecycle management with hot-reload support',
+        description: 'Container orchestration - Docker container lifecycle management (start, stop, restart, status checks)',
+      },
+      { 
+        name: 'Container Logs', 
+        description: 'Container log streaming - Real-time and historical container logs via Server-Sent Events',
       },
       { 
         name: 'Files', 
-        description: 'File system operations - Secure read, write, delete operations scoped to app directories',
+        description: 'File system operations - Secure read, write, delete operations scoped to application directories',
       },
       { 
         name: 'Git', 
-        description: 'Version control - Complete Git workflow (init, clone, commit, push, branch management)',
+        description: 'Version control - Complete Git workflow (init, clone, commit, push, pull, branch, merge management)',
+      },
+      { 
+        name: 'Preview', 
+        description: 'Container preview proxy - Access running application containers through reverse proxy',
+      },
+      { 
+        name: 'Providers', 
+        description: 'AI provider management - Configure AI providers (OpenAI, Anthropic, Google Gemini) and models',
       },
       { 
         name: 'Settings', 
-        description: 'User preferences - AI model selection, API key management, and feature flags',
+        description: 'User preferences - AI model selection, API key management, chat mode configuration, and feature flags',
       },
       { 
         name: 'Stream', 
-        description: 'Real-time streaming - Server-Sent Events (SSE) for AI chat with file operations and container events',
+        description: 'Real-time streaming - Server-Sent Events (SSE) for AI chat responses with file operations and container events',
       },
     ],
     components: {
@@ -259,7 +271,7 @@ const options: swaggerJsdoc.Options = {
             isReady: { type: 'boolean', example: true, description: 'Whether container is ready to serve requests' },
             hasDependenciesInstalled: { type: 'boolean', example: true, description: 'Whether dependencies are installed' },
             containerizationEnabled: { type: 'boolean', example: true, description: 'Whether containerization is enabled in config' },
-            containerName: { type: 'string', nullable: true, example: 'dyad-app-1', description: 'Container name if running' },
+            containerName: { type: 'string', nullable: true, example: 'vibe-app-1', description: 'Container name if running' },
             port: { type: 'integer', nullable: true, example: 32100, description: 'Port if container is running' },
           },
         },
@@ -300,7 +312,7 @@ const options: swaggerJsdoc.Options = {
             isRunning: { type: 'boolean', example: true },
             isReady: { type: 'boolean', example: true },
             hasDependenciesInstalled: { type: 'boolean', example: true },
-            containerName: { type: 'string', nullable: true, example: 'dyad-app-123' },
+            containerName: { type: 'string', nullable: true, example: 'vibe-app-123' },
             port: { type: 'integer', nullable: true, example: 32100 },
             status: { 
               type: 'string', 
@@ -351,6 +363,49 @@ const options: swaggerJsdoc.Options = {
               items: { type: 'string' },
               example: ['React', 'TypeScript', 'Vite', 'Tailwind CSS', 'shadcn/ui']
             },
+          },
+        },
+        Provider: {
+          type: 'object',
+          description: 'AI provider configuration',
+          properties: {
+            id: { type: 'string', example: 'anthropic' },
+            name: { type: 'string', example: 'Anthropic' },
+            apiKeyConfigured: { type: 'boolean', example: true, description: 'Whether API key is configured' },
+            baseURL: { type: 'string', nullable: true, example: 'https://api.anthropic.com', description: 'Custom API base URL' },
+            models: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/AIModel' },
+              description: 'Available models for this provider'
+            },
+          },
+        },
+        AIModel: {
+          type: 'object',
+          description: 'AI model information',
+          properties: {
+            id: { type: 'string', example: 'claude-sonnet-4-5' },
+            name: { type: 'string', example: 'Claude Sonnet 4.5' },
+            providerId: { type: 'string', example: 'anthropic' },
+            contextWindow: { type: 'integer', example: 200000, description: 'Maximum context window size' },
+            supportsImages: { type: 'boolean', example: true, description: 'Whether model supports image inputs' },
+          },
+        },
+        AuthUser: {
+          type: 'object',
+          description: 'Authenticated user information',
+          properties: {
+            id: { type: 'string', example: 'user-123' },
+            email: { type: 'string', example: 'user@example.com' },
+            name: { type: 'string', example: 'John Doe' },
+            provider: { type: 'string', enum: ['keycloak', 'github'], example: 'keycloak' },
+          },
+        },
+        GitHubAuthURL: {
+          type: 'object',
+          description: 'GitHub OAuth authorization URL',
+          properties: {
+            url: { type: 'string', example: 'https://github.com/login/oauth/authorize?client_id=...&redirect_uri=...' },
           },
         },
         SuccessResponse: {
