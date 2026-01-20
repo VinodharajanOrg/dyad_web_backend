@@ -38,6 +38,10 @@ docker-compose up -d
 # 6. Access the application
 # Frontend: https://${SERVER_IP}
 # API Docs: https://${SERVER_IP}/api-docs
+
+# 7. Login to the application
+# Username: vibe-admin
+# Password: vibe-admin
 ```
 
 The application should now be running and accessible.
@@ -226,6 +230,16 @@ curl -k https://<SERVER_IP>/api/health
 # View logs
 docker-compose logs -f
 ```
+
+#### Step 5: Login to Application
+
+Once the application is running, access it at `https://<SERVER_IP>` and login with:
+
+**Default Admin Credentials:**
+- **Username**: `vibe-admin`
+- **Password**: `vibe-admin`
+
+**Note**: For production deployments, change these credentials immediately after first login.
 
 ### Docker Compose Services
 
