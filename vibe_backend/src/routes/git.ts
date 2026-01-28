@@ -4,7 +4,6 @@ import { asyncHandler } from '../middleware/errorHandler';
 import axios from 'axios';
 import { access } from 'fs';
 
-
 const router = Router();
 const gitService = new GitService();
 
@@ -425,7 +424,7 @@ router.get(
  *   delete:
  *     tags: [Git]
  *     summary: Disconnect GitHub account
- *     description: Removes GitHub OAuth token and disconnects GitHub integration
+ *     description: Removes GitHub OAuth token and disconnects GitHub integration for the entire account
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -453,6 +452,54 @@ router.delete(
     await gitService.disconnectGithub(req.user.id);
     res.json({
       message: 'GitHub disconnected successfully',
+    });
+  })
+);
+
+/**
+ * @swagger
+ * /api/git/{appId}/disconnect:
+ *   delete:
+ *     tags: [Git]
+ *     summary: Disconnect repository from app
+ *     description: Removes the GitHub repository connection from a specific app while keeping the GitHub account connected
+ *     parameters:
+ *       - in: path
+ *         name: appId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Application ID
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Repository disconnected successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Repository disconnected from app successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: App not found
+ *       500:
+ *         description: Internal server error
+ */
+router.delete(
+  '/:appId/disconnect',
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    await gitService.disconnectRepo(req.params.appId, req.user.id);
+    res.json({
+      success: true,
+      message: 'Repository disconnected from app successfully',
     });
   })
 );

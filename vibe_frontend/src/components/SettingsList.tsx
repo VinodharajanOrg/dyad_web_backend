@@ -6,16 +6,17 @@ import { useScrollAndNavigateTo } from "@/hooks/useScrollAndNavigateTo";
 import { useAtom, useAtomValue } from "jotai";
 import { activeSettingsSectionAtom } from "@/atoms/viewAtoms";
 import { isAdminAtom } from "@/atoms/userAtoms";
+import { useGitConnectionStatus } from "@/hooks/useGitConnectionStatus";
 
 // NOTE: All available settings sections
 const ALL_SETTINGS_SECTIONS = [
   { id: "general-settings", label: "General", visibleTo: "all" },
   { id: "ai-settings", label: "AI", visibleTo: "admin" },
   { id: "provider-settings", label: "Model Providers", visibleTo: "admin" },
+  { id: "integrations", label: "Integrations", visibleTo: "all" },
   // NOTE: Commented out sections - uncomment when needed
   // { id: "workflow-settings", label: "Workflow", visibleTo: "all" },
   // { id: "telemetry", label: "Telemetry", visibleTo: "all" },
-  // { id: "integrations", label: "Integrations", visibleTo: "all" },
   // { id: "tools-mcp", label: "Tools (MCP)", visibleTo: "all" },
   // { id: "experiments", label: "Experiments", visibleTo: "all" },
   // { id: "danger-zone", label: "Danger Zone", visibleTo: "admin" },
@@ -29,14 +30,20 @@ export function SettingsList({ show }: { show: boolean }) {
   });
 
   const isAdmin = useAtomValue(isAdminAtom);
+  const { data: isGitConnected } = useGitConnectionStatus();
+
   // Filter sections based on user role
   const SETTINGS_SECTIONS = useMemo(() => {
     return ALL_SETTINGS_SECTIONS.filter((section) => {
+      // Hide integrations if git is not connected
+      if (section.id === "integrations" && !isGitConnected) {
+        return false;
+      }
       if (section.visibleTo === "all") return true;
       if (section.visibleTo === "admin") return isAdmin;
       return false;
     });
-  }, [isAdmin]);
+  }, [isAdmin, isGitConnected]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(

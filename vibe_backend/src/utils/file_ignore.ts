@@ -3,78 +3,7 @@
  * Used to exclude files/directories from file listing operations
  */
 
-/**
- * List of files and directories to ignore
- */
-export const IGNORED_PATHS = [
-  // Dependencies
-  'node_modules',
-  'bower_components',
-  'jspm_packages',
-  
-  // Build outputs
-  'dist',
-  'build',
-  '.next',
-  '.nuxt',
-  'out',
-  '.output',
-  '.cache',
-  '.parcel-cache',
-  '.vite',
-  
-  // Version control
-  '.git',
-  '.svn',
-  '.hg',
-  '.gitignore',
-  '.gitattributes',
-  
-  // IDE & Editor
-  '.vscode',
-  '.idea',
-  '.eclipse',
-  '.settings',
-  '*.swp',
-  '*.swo',
-  '*~',
-  '.DS_Store',
-  'Thumbs.db',
-  
-  // Package manager
-  'package-lock.json',
-  'yarn.lock',
-  'pnpm-lock.yaml',
-  'bun.lockb',
-  '.pnpm-store',
-  '.yarn',
-  
-  // Test coverage
-  'coverage',
-  '.nyc_output',
-  
-  // Logs
-  '*.log',
-  'logs',
-  'npm-debug.log*',
-  'yarn-debug.log*',
-  'yarn-error.log*',
-  'pnpm-debug.log*',
-  
-  // Environment
-  '.env.local',
-  '.env.*.local',
-  
-  // Temporary
-  'tmp',
-  'temp',
-  '.tmp',
-  
-  // OS
-  'desktop.ini',
-  'ehthumbs.db',
-];
-
+import { EXPORT_IGNORE_LIST, IGNORED_PATHS } from './constants';
 
 /**
  * Check if a path should be ignored
@@ -84,7 +13,7 @@ export const IGNORED_PATHS = [
  */
 export function shouldIgnorePath(name: string, isDirectory: boolean = false): boolean {
   // Check exact matches
-  if (IGNORED_PATHS.includes(name)) {
+  if (IGNORED_PATHS.includes(name as any)) {
     return true;
   }
 
@@ -96,6 +25,24 @@ export function shouldIgnorePath(name: string, isDirectory: boolean = false): bo
         return true;
       }
     }
+  }
+  
+  return false;
+}
+/**
+ * Check if a file or directory name should be ignored during export
+ * @param name - File or directory name
+ * @returns true if the file should be ignored during export
+ */
+export function shouldIgnoreForExport(name: string): boolean {
+  // Check exact matches
+  if (EXPORT_IGNORE_LIST.includes(name as any)) {
+    return true;
+  }
+  
+  // Check pattern matches (e.g., *.log)
+  if (name.endsWith('.log')) {
+    return true;
   }
   
   return false;

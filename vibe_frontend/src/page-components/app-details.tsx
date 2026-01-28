@@ -373,7 +373,10 @@ export default function AppDetailsPage() {
             <MessageCircle className="h-4 w-4" />
           </Button>
           <div className="border border-gray-200 rounded-md p-4">
-            <GitHubConnector appId={appId} folderName={selectedApp.path} />
+            <GitHubConnector 
+              appId={appId} 
+              folderName={selectedApp.path.split("/").pop() || selectedApp.name} 
+            />
           </div>
           {/* NOTE: hide this features as of now
           {appId && <SupabaseConnector appId={appId} />}

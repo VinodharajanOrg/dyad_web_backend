@@ -86,12 +86,12 @@ function ConnectedGitHubConnector({
     setIsDisconnecting(true);
     setDisconnectError(null);
     try {
-      await gitApi.disconnectGitHub();
+      // Disconnect repo from this app only (keeps GitHub account connected)
+      await gitApi.disconnectRepo(appId);
       
-      // After successful disconnect, update the cached app data for ALL apps to remove GitHub config
-      // This is because GitHub authentication is global - disconnecting affects all apps
-      queryClient.setQueriesData(
-        { queryKey: ["app"] },
+      // Update the cached app data to remove GitHub repo config
+      queryClient.setQueryData(
+        ["app", appId],
         (oldData: any) => {
           if (oldData) {
             return {
@@ -104,6 +104,9 @@ function ConnectedGitHubConnector({
           return oldData;
         }
       );
+      
+      // Refresh app data to show UnconnectedGitHubConnector
+      await refreshApp();
     } catch (err: any) {
       setDisconnectError(err.message || "Failed to disconnect repository.");
     } finally {
@@ -315,6 +318,8 @@ export function UnconnectedGitHubConnector({
   refreshApp,
   expanded,
 }: UnconnectedGitHubConnectorProps) {
+  const queryClient = useQueryClient();
+  
   // --- Collapsible State ---
   const [isExpanded, setIsExpanded] = useState(expanded || false);
 
@@ -368,6 +373,11 @@ export function UnconnectedGitHubConnector({
   // GitHub suggestion state
   const [isFetchingSuggestion, setIsFetchingSuggestion] = useState(false);
   const [isAuthorizationComplete, setIsAuthorizationComplete] = useState(false);
+
+  // Update repoName when folderName prop changes (when switching between apps)
+  useEffect(() => {
+    setRepoName(folderName);
+  }, [folderName]);
 
   // Assume org is the authenticated user for now (could add org input later)
   const githubOrg = ""; // Use empty string for now (GitHub API will default to the authenticated user)
@@ -460,6 +470,9 @@ export function UnconnectedGitHubConnector({
 
           // Refresh settings to fetch the new GitHub token
           await refreshSettings();
+
+          // Invalidate git connection status query to show integrations section
+          queryClient.invalidateQueries({ queryKey: ["git", "connectionStatus"] });
 
           // Fetch GitHub suggestion for repo setup
           if (appId) {

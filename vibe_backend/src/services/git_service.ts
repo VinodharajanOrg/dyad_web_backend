@@ -1029,6 +1029,38 @@ async disconnectGithub(userId: string) {
   return { success: true };
 }
 
+
+/**
+ * Disconnect/unlink a repository from an app
+ * This removes the GitHub repo connection from the app but keeps the GitHub account connected
+ */
+async disconnectRepo(appId: string, userId: string) {
+  const appIdNum = Number.parseInt(appId);
+  
+  // Verify app belongs to user
+  const [app] = await db
+    .select()
+    .from(apps)
+    .where(and(eq(apps.id, appIdNum), eq(apps.user_id, userId)));
+  
+  if (!app) {
+    throw new AppError(404, 'App not found or unauthorized');
+  }
+  
+  // Clear GitHub repo connection fields
+  await db
+    .update(apps)
+    .set({
+      githubOrg: null,
+      githubRepo: null,
+      githubBranch: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(apps.id, appIdNum));
+  
+  return { success: true };
+}
+
 async checkConnectionStatus(userId: string) {
   const rows = await db
     .select()

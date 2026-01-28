@@ -375,4 +375,70 @@ router.post(
   })
 );
 
+/**
+ * @swagger
+ * /api/apps/{id}/export:
+ *   get:
+ *     tags: [Apps]
+ *     summary: Export app code as a zip file
+ *     description: Downloads the entire app directory as a zip file with the app name
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Application ID
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Zip file containing app code
+ *         content:
+ *           application/zip:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       404:
+ *         description: App not found
+ *       500:
+ *         description: Internal server error
+ */
+router.get(
+  "/:id/export",
+  requireAuth,
+  validate(appIdParamSchema, 'params'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const userId = (req as any).user?.id;
+    const appId = req.params.id;
+    
+    // Get archive from service
+    const { archive, zipFileName } = await appService.exportApp(appId, userId);
+    
+    // Set response headers for file download
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${zipFileName}"`);
+    
+    // Handle archiver warnings and errors
+    archive.on('warning', (err) => {
+      if (err.code === 'ENOENT') {
+        logger.warn('Archiver warning', { service: 'apps-route', error: err.message });
+      } else {
+        throw err;
+      }
+    });
+    
+    archive.on('error', (err) => {
+      logger.error('Archiver error', err, { service: 'apps-route', appId });
+      throw err;
+    });
+    
+    // Pipe archive data to the response
+    archive.pipe(res);
+    
+    // Finalize the archive
+    await archive.finalize();
+  })
+);
+
 export default router;

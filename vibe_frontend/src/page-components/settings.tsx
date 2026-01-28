@@ -15,7 +15,7 @@ import { useAppVersion } from "@/hooks/useAppVersion";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
-// import { GitHubIntegration } from "@/components/GitHubIntegration";
+import { GitHubIntegration } from "@/components/GitHubIntegration";
 // import { VercelIntegration } from "@/components/VercelIntegration";
 // import { SupabaseIntegration } from "@/components/SupabaseIntegration";
 
@@ -32,6 +32,7 @@ import { ZoomSelector } from "@/components/ZoomSelector";
 import { useSetAtom, useAtomValue } from "jotai";
 import { activeSettingsSectionAtom } from "@/atoms/viewAtoms";
 import { isAdminAtom } from "@/atoms/userAtoms";
+import { useGitConnectionStatus } from "@/hooks/useGitConnectionStatus";
 
 export default function SettingsPage() {
   // const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
@@ -42,6 +43,7 @@ export default function SettingsPage() {
   const setActiveSettingsSection = useSetAtom(activeSettingsSectionAtom);
 
   const isAdmin = useAtomValue(isAdminAtom);
+  const {data: isGitConnected} = useGitConnectionStatus();
 
   useEffect(() => {
     setActiveSettingsSection("general-settings");
@@ -127,21 +129,22 @@ export default function SettingsPage() {
             </div>
           </div> */}
 
-          {/* NOTE: Integrations Section - Temporarily hidden, uncomment when needed */}
-          {/* <div
-            id="integrations"
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6"
-          >
-            <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-              Integrations
-            </h2>
-            <div className="space-y-4">
-              <GitHubIntegration />
-              <VercelIntegration />
-              <SupabaseIntegration />
-              <NeonIntegration />
+          {isGitConnected && (
+            <div
+              id="integrations"
+              className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6"
+            >
+              <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                Integrations
+              </h2>
+              <div className="space-y-4">
+                <GitHubIntegration />
+                {/* <VercelIntegration /> */}
+                {/* <SupabaseIntegration /> */}
+                {/* <NeonIntegration /> */}
+              </div>
             </div>
-          </div> */}
+          )}
 
           {/* NOTE: Tools (MCP) - Temporarily hidden, uncomment when needed */}
           {/* <div

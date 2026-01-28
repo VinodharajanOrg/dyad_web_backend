@@ -300,7 +300,15 @@ export const gitApi = {
     }
   },
 
-  // Disconnect GitHub repository
+  // Disconnect repository from app (keeps GitHub account connected)
+  disconnectRepo: async (appId: number): Promise<{ success: boolean }> => {
+    const response = await apiClient.delete<{ success: boolean }>(
+      `/git/${appId}/disconnect`,
+    );
+    return response;
+  },
+
+  // Disconnect GitHub account completely
   disconnectGitHub: async (): Promise<{ success: boolean; message: string }> => {
     const response = await apiClient.delete<{
       success: boolean;

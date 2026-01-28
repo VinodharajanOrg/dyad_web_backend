@@ -1,39 +1,14 @@
 "use client";
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Github } from "lucide-react";
-import { useSettings } from "@/hooks/useSettings";
-import { showSuccess, showError } from "@/lib/toast";
+import { useDisconnectGitHub } from "@/hooks/useDisconnectGitHub";
 
 export function GitHubIntegration() {
-  const { settings, updateSettings } = useSettings();
-  const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const { mutate: disconnectGitHub, isPending: isDisconnecting } = useDisconnectGitHub();
 
-  const handleDisconnectFromGithub = async () => {
-    setIsDisconnecting(true);
-    try {
-      const result = await updateSettings({
-        githubAccessToken: undefined,
-      });
-      if (result) {
-        showSuccess("Successfully disconnected from GitHub");
-      } else {
-        showError("Failed to disconnect from GitHub");
-      }
-    } catch (err: any) {
-      showError(
-        err.message || "An error occurred while disconnecting from GitHub",
-      );
-    } finally {
-      setIsDisconnecting(false);
-    }
+  const handleDisconnectFromGithub = () => {
+    disconnectGitHub();
   };
-
-  const isConnected = !!settings?.githubAccessToken;
-
-  if (!isConnected) {
-    return null;
-  }
 
   return (
     <div className="flex items-center justify-between">

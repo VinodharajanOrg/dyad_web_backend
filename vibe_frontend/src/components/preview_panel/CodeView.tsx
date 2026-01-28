@@ -1,14 +1,18 @@
 "use client";
 import { FileEditor } from "./FileEditor";
 import { FileTree } from "./FileTree";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Download } from "lucide-react";
 import { useLoadApp } from "@/hooks/useLoadApp";
 import { useAtomValue } from "jotai";
 import { selectedFileAtom } from "@/atoms/viewAtoms";
 import { previewPanelKeyAtom } from "@/atoms/appAtoms";
+import { appsApi } from "@/api/endpoints/apps";
+import { showError, showSuccess } from "@/lib/toast";
+import { useState } from "react";
 
 interface App {
   id?: number;
+  name?: string;
   files?: string[];
 }
 
@@ -22,6 +26,33 @@ export const CodeView = ({ loading, app }: CodeViewProps) => {
   const selectedFile = useAtomValue(selectedFileAtom);
   const { refreshApp } = useLoadApp(app?.id ?? null);
   const previewPanelKey = useAtomValue(previewPanelKeyAtom);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = async () => {
+    if (!app?.id) return;
+
+    try {
+      setIsExporting(true);
+      const blob = await appsApi.export(app.id);
+      
+      // Create a download link and trigger download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${app.name || 'app'}-export.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      showSuccess('App exported successfully!');
+    } catch (error) {
+      console.error('Failed to export app:', error);
+      showError('Failed to export app');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   if (loading) {
     return <div className="text-center py-4">Loading files...</div>;
@@ -37,16 +68,26 @@ export const CodeView = ({ loading, app }: CodeViewProps) => {
     return (
       <div className="flex flex-col h-full">
         {/* Toolbar */}
-        <div className="flex items-center p-2 border-b space-x-2">
+        <div className="flex items-center justify-between p-2 border-b">
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => refreshApp()}
+              className="p-1 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={loading || !app.id}
+              title="Refresh Files"
+            >
+              <RefreshCw size={16} />
+            </button>
+            <div className="text-sm text-gray-500">{app.files.length} files</div>
+          </div>
           <button
-            onClick={() => refreshApp()}
+            onClick={handleExport}
             className="p-1 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={loading || !app.id}
-            title="Refresh Files"
+            disabled={isExporting || !app.id}
+            title="Export App"
           >
-            <RefreshCw size={16} />
+            <Download size={16} className={isExporting ? 'animate-pulse' : ''} />
           </button>
-          <div className="text-sm text-gray-500">{app.files.length} files</div>
         </div>
 
         {/* Content */}

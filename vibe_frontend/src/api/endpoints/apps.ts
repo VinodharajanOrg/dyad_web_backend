@@ -120,4 +120,14 @@ export const appsApi = {
       params: { name: query },
     });
   },
+
+  /**
+   * Export/download app code as a zip file
+   * GET /api/apps/:id/export
+   */
+  export: async (appId: number): Promise<Blob> => {
+    return apiClient.getRaw<Blob>(`/apps/${appId}/export`, {
+      responseType: 'blob',
+    });
+  },
 };

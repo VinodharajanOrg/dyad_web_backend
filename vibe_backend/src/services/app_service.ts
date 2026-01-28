@@ -7,6 +7,9 @@ import * as path from 'node:path';
 import { TemplateService } from './template_service';
 import { logger } from '../utils/logger';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
+import archiver from 'archiver';
+import { shouldIgnoreForExport } from '../utils/file_ignore';
 
 
 /**
@@ -272,6 +275,74 @@ export class AppService {
         .limit(limit);
     } catch (error: any) {
       throw new AppError(500, `Failed to search apps: ${error.message}`);
+    }
+  }
+
+  /**
+   * Export app as a zip archive
+   * Returns an archiver instance that can be piped to a response
+   */
+  async exportApp(appId: string, userId: string): Promise<{ archive: archiver.Archiver; zipFileName: string }> {
+    try {
+      // Get app details
+      const app = await this.getApp(appId, userId);
+      
+      // Get the app directory path
+      const appPath = this.getFullAppPath(app.path);
+      
+      // Check if directory exists
+      if (!fsSync.existsSync(appPath)) {
+        throw new AppError(404, 'App directory not found');
+      }
+      
+      // Create archiver instance
+      const archive = archiver('zip', {
+        zlib: { level: 9 } // Maximum compression
+      });
+      
+      // Helper function to recursively get all files
+      const getAllFiles = (dir: string, baseDir: string = dir): string[] => {
+        const items = fsSync.readdirSync(dir);
+        const files: string[] = [];
+        
+        for (const item of items) {
+          if (shouldIgnoreForExport(item)) continue;
+          
+          const fullPath = path.join(dir, item);
+          const relativePath = path.relative(baseDir, fullPath);
+          const stat = fsSync.statSync(fullPath);
+          
+          if (stat.isDirectory()) {
+            // Recursively get files from subdirectory
+            files.push(...getAllFiles(fullPath, baseDir));
+          } else {
+            files.push(relativePath);
+          }
+        }
+        
+        return files;
+      };
+      
+      // Get all files (excluding ignored items)
+      const allFiles = getAllFiles(appPath);
+      
+      // Sort files alphabetically
+      const sortedFiles = allFiles.sort((a, b) => a.localeCompare(b));
+      
+      // Add files to archive
+      for (const file of sortedFiles) {
+        const fullPath = path.join(appPath, file);
+        archive.file(fullPath, { name: file });
+      }
+      
+      const zipFileName = `${app.name}-export.zip`;
+      
+      logger.info('App export prepared', { service: 'app', appId, fileName: zipFileName, fileCount: sortedFiles.length });
+      
+      return { archive, zipFileName };
+    } catch (error: any) {
+      if (error instanceof AppError) throw error;
+      throw new AppError(500, `Failed to export app: ${error.message}`);
     }
   }
 }
