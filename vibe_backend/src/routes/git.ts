@@ -202,6 +202,57 @@ router.get(
 
 /**
  * @swagger
+ * /api/git/organizations:
+ *   get:
+ *     tags: [Git]
+ *     summary: Get user's GitHub organizations
+ *     description: Retrieves the list of organizations the authenticated user belongs to
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Organizations fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       type: object
+ *                       properties:
+ *                         login:
+ *                           type: string
+ *                         type:
+ *                           type: string
+ *                     organizations:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           login:
+ *                             type: string
+ *                           description:
+ *                             type: string
+ */
+router.get(
+  '/organizations',
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const data = await gitService.getGithubOrganizations(req.user.id);
+    res.json({
+      success: true,
+      data,
+    });
+  })
+);
+
+/**
+ * @swagger
  * /api/git/{appId}/createRepo:
  *   post:
  *     tags: [Git]
@@ -223,6 +274,10 @@ router.get(
  *               - repo
  *               - branch
  *             properties:
+ *               org:
+ *                 type: string
+ *                 description: Organization name (optional). If not provided, repo will be created under user account. Required for enterprise-managed accounts.
+ *                 example: mastercard-sandbox
  *               repo:
  *                 type: string
  *                 example: gentle-falcon-skip
@@ -261,7 +316,7 @@ router.get(
 router.post(
   '/:appId/createRepo',
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const { repo, branch } = req.body;
+    const { repo, branch, org } = req.body;
     if (!repo || !branch) {
       return res.status(400).json({
         error: 'repo and branch are required',
@@ -270,7 +325,8 @@ router.post(
     const data = await gitService.createGithubRepo(
       req.user.id,
       repo,
-      branch
+      branch,
+      org
     );
     res.json({
       success: true,
