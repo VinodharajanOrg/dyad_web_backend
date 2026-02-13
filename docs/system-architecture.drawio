@@ -1,0 +1,123 @@
+<mxfile host="drawio" modified="2026-02-10T12:00:00Z" agent="5.0" etag="architecture-v1" version="20.0" type="device">
+  <diagram id="system-architecture" name="System Architecture">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1200" background="none" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        
+        <!-- Title -->
+        <mxCell id="title" value="Vibe Mastercard - System Architecture" style="fontSize=20;fontStyle=1;align=center;verticalAlign=middle;spacingTop=20;" vertex="1" parent="1">
+          <mxGeometry x="0" y="10" width="1700" height="40" as="geometry"/>
+        </mxCell>
+        
+        <!-- CLIENT LAYER -->
+        <mxCell id="client-layer" value="CLIENT LAYER" style="fontSize=14;fontStyle=1;align=center;fillColor=#e1f5ff;rounded=1;strokeWidth=2;strokeColor=#01579b;" vertex="1" parent="1">
+          <mxGeometry x="100" y="70" width="1500" height="40" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="browser" value="Web Browser&#10;(Chrome, Firefox, Safari, Edge)&#10;• React UI Components&#10;• State Management (Jotai)&#10;• HTTP/HTTPS Client (Axios)&#10;• WebSocket Client" style="fontSize=11;align=center;fillColor=#b3e5fc;rounded=1;strokeWidth=2;strokeColor=#0277bd;whiteSpace=wrap;wordWrap=1;" vertex="1" parent="1">
+          <mxGeometry x="550" y="120" width="600" height="100" as="geometry"/>
+        </mxCell>
+        
+        <!-- Arrow from Browser to Reverse Proxy -->
+        <mxCell id="client-to-proxy" value="HTTPS (TLS 1.3)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=10;strokeWidth=2;" edge="1" parent="1" source="browser" target="nginx">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- REVERSE PROXY LAYER -->
+        <mxCell id="proxy-layer" value="REVERSE PROXY LAYER" style="fontSize=14;fontStyle=1;align=center;fillColor=#f3e5f5;rounded=1;strokeWidth=2;strokeColor=#512da8;" vertex="1" parent="1">
+          <mxGeometry x="100" y="240" width="1500" height="40" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="nginx" value="Nginx Reverse Proxy&#10;• SSL/TLS Termination&#10;• Load Balancing&#10;• Request Routing&#10;• Static Asset Serving&#10;• Rate Limiting (100 req/min)&#10;• CORS &amp; Security Headers" style="fontSize=11;align=center;fillColor=#e1bee7;rounded=1;strokeWidth=2;strokeColor=#7b1fa2;whiteSpace=wrap;wordWrap=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="290" width="1500" height="120" as="geometry"/>
+        </mxCell>
+        
+        <!-- Routing info in Nginx -->
+        <mxCell id="nginx-routes" value="Routes:&#10;/          → Frontend (Port 3000)&#10;/api/*     → Backend (Port 3001)&#10;/api-docs  → Swagger Docs&#10;/health    → Health Check" style="fontSize=9;align=left;fillColor=#f0f0f0;rounded=0;strokeWidth=1;strokeColor=#999;whiteSpace=wrap;wordWrap=1;" vertex="1" parent="1">
+          <mxGeometry x="120" y="305" width="280" height="90" as="geometry"/>
+        </mxCell>
+        
+        <!-- Arrow from Nginx to Frontend & Backend -->
+        <mxCell id="proxy-to-frontend" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=10;strokeWidth=2;dashed=0;" edge="1" parent="1" source="nginx" target="frontend">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="proxy-to-backend" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=10;strokeWidth=2;dashed=0;" edge="1" parent="1" source="nginx" target="backend">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- APPLICATION LAYER - FRONTEND -->
+        <mxCell id="app-layer-label" value="APPLICATION LAYER" style="fontSize=14;fontStyle=1;align=center;fillColor=#c8e6c9;rounded=1;strokeWidth=2;strokeColor=#1b5e20;" vertex="1" parent="1">
+          <mxGeometry x="100" y="430" width="1500" height="40" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="frontend" value="Next.js Application (Port 3000)&#10;• Server-Side Rendering&#10;• React Components (v19)&#10;• API Client (Axios)&#10;• State Management (Jotai)&#10;• Routing &amp; Navigation&#10;• UI/UX with Tailwind CSS" style="fontSize=11;align=center;fillColor=#a5d6a7;rounded=1;strokeWidth=2;strokeColor=#2e7d32;whiteSpace=wrap;wordWrap=1;" vertex="1" parent="1">
+          <mxGeometry x="120" y="480" width="320" height="140" as="geometry"/>
+        </mxCell>
+        
+        <!-- BACKEND LAYER -->
+        <mxCell id="backend" value="Express.js Server (Port 3001)&#10;• REST API Endpoints&#10;• WebSocket Server&#10;• Authentication (JWT)&#10;• Authorization (RBAC)&#10;• Business Logic&#10;• Container Management&#10;• AI Provider Client&#10;• Git Operations" style="fontSize=11;align=center;fillColor=#a5d6a7;rounded=1;strokeWidth=2;strokeColor=#2e7d32;whiteSpace=wrap;wordWrap=1;" vertex="1" parent="1">
+          <mxGeometry x="520" y="480" width="360" height="140" as="geometry"/>
+        </mxCell>
+        
+        <!-- SERVICES LAYER -->
+        <mxCell id="services" value="Services Layer&#10;• Container Lifecycle Service&#10;• AI Provider Service&#10;• File Management Service&#10;• Chat Service&#10;• Git Service&#10;• Authentication Service" style="fontSize=11;align=center;fillColor=#fff9c4;rounded=1;strokeWidth=2;strokeColor=#f57f17;whiteSpace=wrap;wordWrap=1;" vertex="1" parent="1">
+          <mxGeometry x="950" y="480" width="320" height="140" as="geometry"/>
+        </mxCell>
+        
+        <!-- Arrow from Frontend to Backend -->
+        <mxCell id="frontend-to-backend" value="API Calls" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=10;strokeWidth=2;" edge="1" parent="1" source="frontend" target="backend">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- Arrow from Backend to Services -->
+        <mxCell id="backend-to-services" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=10;strokeWidth=2;" edge="1" parent="1" source="backend" target="services">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- DATA & EXTERNAL SERVICES LAYER -->
+        <mxCell id="data-layer-label" value="DATA &amp; EXTERNAL SERVICES LAYER" style="fontSize=14;fontStyle=1;align=center;fillColor=#ffccbc;rounded=1;strokeWidth=2;strokeColor=#e65100;" vertex="1" parent="1">
+          <mxGeometry x="100" y="640" width="1500" height="40" as="geometry"/>
+        </mxCell>
+        
+        <!-- DATABASE -->
+        <mxCell id="database" value="PostgreSQL Database&#10;• Apps Data&#10;• Chats &amp; Messages&#10;• Files &amp; Metadata&#10;• Settings &amp; Configuration&#10;• User Metadata" style="fontSize=11;align=center;fillColor=#ffab91;rounded=1;strokeWidth=2;strokeColor=#bf360c;whiteSpace=wrap;wordWrap=1;" vertex="1" parent="1">
+          <mxGeometry x="120" y="690" width="280" height="120" as="geometry"/>
+        </mxCell>
+        
+        <!-- KEYCLOAK -->
+        <mxCell id="keycloak" value="Keycloak Auth Server&#10;• User Authentication&#10;• OAuth2/OIDC Protocol&#10;• JWT Token Management&#10;• User &amp; Role Management&#10;• Session Management" style="fontSize=11;align=center;fillColor=#ffab91;rounded=1;strokeWidth=2;strokeColor=#bf360c;whiteSpace=wrap;wordWrap=1;" vertex="1" parent="1">
+          <mxGeometry x="460" y="690" width="280" height="120" as="geometry"/>
+        </mxCell>
+        
+        <!-- DOCKER ENGINE -->
+        <mxCell id="docker" value="Docker Engine&#10;• Container Runtime&#10;• App Containers&#10;• Lifecycle Management&#10;• Health Checks&#10;• Container Logs" style="fontSize=11;align=center;fillColor=#ffab91;rounded=1;strokeWidth=2;strokeColor=#bf360c;whiteSpace=wrap;wordWrap=1;" vertex="1" parent="1">
+          <mxGeometry x="800" y="690" width="280" height="120" as="geometry"/>
+        </mxCell>
+        
+        <!-- AI PROVIDERS -->
+        <mxCell id="ai-providers" value="AI Providers&#10;• OpenAI (GPT Models)&#10;• Anthropic (Claude)&#10;• Google (Gemini)&#10;• Custom Providers" style="fontSize=11;align=center;fillColor=#ffab91;rounded=1;strokeWidth=2;strokeColor=#bf360c;whiteSpace=wrap;wordWrap=1;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="690" width="280" height="120" as="geometry"/>
+        </mxCell>
+        
+        <!-- Arrows from Services to Data Layer -->
+        <mxCell id="services-to-db" value="Query/Persist" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=9;strokeWidth=2;" edge="1" parent="1" source="services" target="database">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="backend-to-keycloak" value="Token Validation" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=9;strokeWidth=2;" edge="1" parent="1" source="backend" target="keycloak">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="services-to-docker" value="Container Ops" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=9;strokeWidth=2;" edge="1" parent="1" source="services" target="docker">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="ai-service-to-providers" value="API Calls" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=9;strokeWidth=2;" edge="1" parent="1" source="services" target="ai-providers">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

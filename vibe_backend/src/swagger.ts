@@ -17,7 +17,7 @@ const options: swaggerJsdoc.Options = {
 - User Settings: AI model configuration, API key management, and feature preferences
 - Real-time Streaming: Server-Sent Events (SSE) for AI responses and container events
 - GitHub OAuth: Repository access and integration
-- Keycloak Authentication: Enterprise-grade single sign-on`,
+- Azure AD Authentication: Enterprise-grade single sign-on`,
       contact: {
         name: 'Vibe Mastercard Team',
       },
@@ -38,7 +38,7 @@ const options: swaggerJsdoc.Options = {
       },
       { 
         name: 'Auth', 
-        description: 'Authentication and authorization - Keycloak integration, GitHub OAuth, login, logout, and token management',
+        description: 'Authentication and authorization - Azure AD integration, GitHub OAuth, login, logout, and token management',
       },
       { 
         name: 'Chats', 
@@ -398,7 +398,7 @@ const options: swaggerJsdoc.Options = {
             id: { type: 'string', example: 'user-123' },
             email: { type: 'string', example: 'user@example.com' },
             name: { type: 'string', example: 'John Doe' },
-            provider: { type: 'string', enum: ['keycloak', 'github'], example: 'keycloak' },
+            provider: { type: 'string', enum: ['azure_ad', 'github'], example: 'azure_ad' },
           },
         },
         GitHubAuthURL: {

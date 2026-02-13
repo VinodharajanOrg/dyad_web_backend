@@ -1,12 +1,12 @@
 export interface AuthConfig {
-    
-        issuer: string;
-        clientId: string;
-        clientSecret: string;
-        redirectUri: string;
-        tokenEndpoint: string;
-        userInfoEndpoint: string;
-        //logoutEndpoint: string;
-        
-    
+    tokenEndpoint: string;
+    userInfoEndpoint: string;
+    azureAdClientId: string;
+    azureAdTenantId: string;
+    azureAdClientSecret: string;
+    azureAdBackendClientId: string;
+    azureAdRedirectUri: string;
+    azureAdAuthorityUrl: string;
+    azureAdJwksUri: string;
+    azureAdIssuer: string;
 }

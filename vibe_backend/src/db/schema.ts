@@ -292,7 +292,7 @@ export const gitIntegrations = pgTable(
   {
     id: serial('id').primaryKey(),
 
-    // Keycloak user id (same value used in apps.user_id)
+    // Azure AD user id (same value used in apps.user_id)
     userId: text('user_id').notNull(),
 
     // github | gitlab (future)

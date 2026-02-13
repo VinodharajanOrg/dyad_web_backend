@@ -272,7 +272,7 @@ COMMENT ON TABLE mcp_tool_consents IS 'User consent per MCP server tool';
 
 
 ------------------------------------------------------------------------------
--- DYAD USERS TABLE (renamed to avoid Keycloak conflict)
+-- DYAD USERS TABLE (application-level users)
 ------------------------------------------------------------------------------
 CREATE TABLE dyad_users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -287,7 +287,7 @@ CREATE TABLE dyad_users (
         UNIQUE (provider, provider_user_id)
 );
 
-COMMENT ON TABLE dyad_users IS 'Application-level users separate from Keycloak users';
+COMMENT ON TABLE dyad_users IS 'Application-level users for Azure AD and other providers';
 
 
 ------------------------------------------------------------------------------

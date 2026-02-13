@@ -245,12 +245,14 @@ export const gitApi = {
     appId: number,
     repo: string,
     branch: string,
+    org?: string,
   ): Promise<CreateGitHubRepoData> => {
     const response = await apiClient.post<CreateGitHubRepoResponse>(
       `/git/${appId}/createRepo`,
       {
         repo,
         branch,
+        org: org || "mastercard-sendbox",
       },
     );
     // The response should be the entire response object with nested data

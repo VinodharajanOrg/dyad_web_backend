@@ -11,11 +11,11 @@ const router = express.Router();
  * /api/auth/login:
  *   get:
  *     tags: [Auth]
- *     summary: Initiate Keycloak login
- *     description: Redirects user to Keycloak login page for authentication
+ *     summary: Initiate Azure AD login
+ *     description: Redirects user to Azure AD login page for authentication
  *     responses:
  *       302:
- *         description: Redirect to Keycloak login
+ *         description: Redirect to Azure AD login
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
@@ -37,15 +37,15 @@ router.get("/login", (req, res) => {
  * /api/auth/callback:
  *   get:
  *     tags: [Auth]
- *     summary: Handle Keycloak OAuth callback
- *     description: Processes Keycloak authentication callback, exchanges code for tokens, and sets authentication cookies
+ *     summary: Handle Azure AD OAuth callback
+ *     description: Processes Azure AD authentication callback, exchanges code for tokens, and sets authentication cookies
  *     parameters:
  *       - in: query
  *         name: code
  *         required: true
  *         schema:
  *           type: string
- *         description: OAuth authorization code from Keycloak
+ *         description: OAuth authorization code from Azure AD
  *     responses:
  *       302:
  *         description: Redirect to frontend with authentication cookies set
@@ -57,13 +57,13 @@ router.get("/login", (req, res) => {
  *       500:
  *         description: Authentication failed
  */
-//callback
+// Azure AD Callback
 router.get("/callback", async (req: any, res) => {
   try {
     const { code } = req.query;
     
     // Comprehensive request logging
-    logger.info('🔍 Auth Callback - Full Request Analysis', {
+    logger.info('Auth Callback - Full Request Analysis', {
       service: 'auth',
       code: code ? '***' : 'missing',
       protocol: req.protocol,
@@ -92,13 +92,20 @@ router.get("/callback", async (req: any, res) => {
       origin: req.headers.origin,
       userAgent: req.headers['user-agent'],
     });
-    
-    const tokenResponse = await authService.handleCallback(code);
+
+    if (!code) {
+      logger.warn('Authorization code is missing in the callback request.', { service: 'auth' });
+      return res.status(400).send("Authorization code is required");
+    }
+
+    const redirectUri = process.env.AZURE_AD_REDIRECT_URI;
+
+    const tokenResponse = await authService.handleCallback(code as string, redirectUri as string);
     
     logger.info('Token response received', {
       service: 'auth',
-      hasAccessToken: !!tokenResponse.tokens.access_token,
-      hasRefreshToken: !!tokenResponse.tokens.refresh_token,
+      hasAccessToken: !!tokenResponse.tokens.accessToken,
+      hasRefreshToken: !!tokenResponse.tokens.refreshToken,
       userId: tokenResponse.user.id,
       username: tokenResponse.user.username,
     });
@@ -106,14 +113,14 @@ router.get("/callback", async (req: any, res) => {
     // Get cookie options for cross-origin requests (auto-detects HTTPS)
     const cookieOptions = getCookieOptions(req);
     
-    // Set cookies with detailed logging
+    // Set cookies with logging
     const cookiesToSet = [
       { name: 'user_id', value: tokenResponse.user.id },
       { name: 'username', value: tokenResponse.user.username },
       { name: 'email', value: tokenResponse.user.email },
-      { name: 'accessToken', value: tokenResponse.tokens.access_token },
-      { name: 'refreshToken', value: tokenResponse.tokens.refresh_token },
-      { name: 'expiresAt', value: tokenResponse.tokens.expires_in },
+      { name: 'accessToken', value: tokenResponse.tokens.accessToken },
+      { name: 'refreshToken', value: tokenResponse.tokens.refreshToken },
+      { name: 'expiresAt', value: tokenResponse.tokens.expiresIn },
     ];
     
     cookiesToSet.forEach(({ name, value }) => {
@@ -128,7 +135,7 @@ router.get("/callback", async (req: any, res) => {
     
     // Log actual Set-Cookie headers before redirect
     const setCookieHeaders = res.getHeader('Set-Cookie');
-    logger.info('🔍 Actual Set-Cookie Headers Before Redirect', {
+    logger.info('Actual Set-Cookie Headers Before Redirect', {
       service: 'auth',
       headers: setCookieHeaders,
       headerCount: Array.isArray(setCookieHeaders) ? setCookieHeaders.length : (setCookieHeaders ? 1 : 0),
@@ -144,7 +151,7 @@ router.get("/callback", async (req: any, res) => {
       'cache-control': res.getHeader('Cache-Control'),
     };
     
-    logger.info('🔍 All Response Headers Before Redirect', {
+    logger.info('All Response Headers Before Redirect', {
       service: 'auth',
       statusCode: res.statusCode || 302,
       headers: allHeaders,
@@ -160,7 +167,7 @@ router.get("/callback", async (req: any, res) => {
         const hasMaxAge = header.includes('Max-Age');
         const cookieName = header.split('=')[0];
         
-        logger.info(`🔍 Cookie Header Validation [${index + 1}/${setCookieHeaders.length}]`, {
+        logger.info(`Cookie Header Validation [${index + 1}/${setCookieHeaders.length}]`, {
           service: 'auth',
           cookieName,
           hasSecure,
@@ -173,7 +180,7 @@ router.get("/callback", async (req: any, res) => {
         });
       });
     }
-    
+
     const redirectUrl = process.env.FRONTEND_URL || "http://localhost:3000/";
     logger.info('Redirecting after auth', {
       service: 'auth',
@@ -187,7 +194,7 @@ router.get("/callback", async (req: any, res) => {
     const isCrossOrigin = requestOrigin && !requestOrigin.includes(redirectOrigin);
     
     if (isCrossOrigin) {
-      logger.warn('⚠️  Cross-Origin Redirect Detected', {
+      logger.warn('Cross-Origin Redirect Detected', {
         service: 'auth',
         requestOrigin,
         redirectOrigin,
@@ -201,7 +208,7 @@ router.get("/callback", async (req: any, res) => {
     const frontendHost = new URL(redirectUrl).host;
     if (backendHost !== frontendHost) {
       logger.error(
-        '🚨 COOKIE BLOCKING LIKELY - Different Hosts',
+        'COOKIE BLOCKING LIKELY - Different Hosts',
         undefined,
         { service: 'auth' },
         {
@@ -219,7 +226,7 @@ router.get("/callback", async (req: any, res) => {
       location: redirectUrl,
       cookieCount: cookiesToSet.length,
     });
-    
+
     return res.redirect(redirectUrl);
   } catch (error) {
     logger.error('Auth callback error', error instanceof Error ? error : new Error(String(error)), { service: 'auth' });
@@ -262,7 +269,7 @@ router.get("/logout", (req, res) => {
       });
     });
     
-    const redirectUrl = process.env.FRONTEND_URL || "http://localhost:5173/";
+    const redirectUrl = process.env.FRONTEND_URL || "http://localhost:3000/";
     logger.info('Redirecting after logout', {
       service: 'auth',
       redirectUrl,
@@ -369,7 +376,7 @@ router.post("/refreshToken", async (req, res) => {
  *   get:
  *     tags: [Auth]
  *     summary: Get current user information
- *     description: Retrieves authenticated user details from Keycloak
+ *     description: Retrieves authenticated user details from Azure AD
  *     security:
  *       - bearerAuth: []
  *     responses:

@@ -794,39 +794,25 @@ async listGithubRepos(userId: string) {
 async createGithubRepo(
   userId: string,
   repo: string,
-  branch: string,
-  orgName?: string
+  branch: string
 ) {
   //Get GitHub access token
   const token = await this.getGithubAccessToken(userId);
-  
-  let org: string;
-  let createUrl: string;
-  
-  if (orgName) {
-    // Creating repository in an organization
-    org = orgName;
-    createUrl = `https://api.github.com/orgs/${orgName}/repos`;
-  } else {
-    // Creating repository under user account
-    //Fetch GitHub user (org / owner)
-    const userRes = await fetch('https://api.github.com/user', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
-      },
-    });
-    if (!userRes.ok) {
-      throw new AppError(500, 'Failed to fetch GitHub user');
-    }
-    const user = (await userRes.json()) as { login: string };
-    org = user.login;
-    createUrl = 'https://api.github.com/user/repos';
+  //Fetch GitHub user (org / owner)
+  const userRes = await fetch('https://api.github.com/user', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+    },
+  });
+  if (!userRes.ok) {
+    throw new AppError(500, 'Failed to fetch GitHub user');
   }
-  
+  const user = (await userRes.json()) as { login: string };
+  const org = user.login;
   //Create GitHub repository
   const createRes = await fetch(
-    createUrl,
+    'https://api.github.com/user/repos',
     {
       method: 'POST',
       headers: {
@@ -851,50 +837,6 @@ async createGithubRepo(
     org,
     repo,
     branch,
-  };
-}
-
-async getGithubOrganizations(userId: string) {
-  //Get GitHub access token
-  const token = await this.getGithubAccessToken(userId);
-  
-  //Fetch user's organizations
-  const orgsRes = await fetch('https://api.github.com/user/orgs', {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-    },
-  });
-  
-  if (!orgsRes.ok) {
-    throw new AppError(500, 'Failed to fetch GitHub organizations');
-  }
-  
-  const orgs = (await orgsRes.json()) as Array<{ login: string; description?: string }>;
-  
-  //Also get user info
-  const userRes = await fetch('https://api.github.com/user', {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-    },
-  });
-  
-  if (!userRes.ok) {
-    throw new AppError(500, 'Failed to fetch GitHub user');
-  }
-  
-  const user = (await userRes.json()) as { login: string; type: string };
-  
-  return {
-    user: {
-      login: user.login,
-      type: user.type,
-    },
-    organizations: orgs.map(org => ({
-      login: org.login,
-      description: org.description,
-    })),
   };
 }
 
